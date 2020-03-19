@@ -1,0 +1,3 @@
+std_msgs/String[]  obj_ids
+---
+bool success
