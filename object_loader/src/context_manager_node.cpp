@@ -132,44 +132,45 @@ class PlanningSceneConfigurator
     std::vector< moveit_msgs::CollisionObject > objs;
     std::vector< moveit_msgs::ObjectColor     > colors;
     std::vector<std::string > v = planning_scene_interface_.getKnownObjectNames();
-    
+    std::map<std::string,int> types;
+    for (const std::string& type: v)
+      types.insert(std::pair<std::string,int>(type,0));
+
     for (auto obj : req.objects)
     {
-      std::string id = obj.obj_id.data;
+      std::string type = obj.object_type.data;
       
-      int count = 0;
-      id +="_";
-      id +=std::to_string(count);
       
-      if(std::count(v.begin(),v.end(),id))
+      std::string id;
+      std::map<std::string,int>::iterator it =types.find(type);
+      if (it==types.end())
       {
-        while(std::count(v.begin(),v.end(),id))
-        { 
-          ROS_INFO_STREAM(id<<" already present, adding one");
-          count ++;
-          id = obj.obj_id.data;
-          id +="_";
-          id +=std::to_string(count);
-        }
+        types.insert(std::pair<std::string,int>(type,1));
+        id=type+"_0";
       }
-      
+      else
+      {
+        id=type+"_"+std::to_string(it->second++);
+      }
+      res.ids.push_back(id);
+
       ROS_INFO_STREAM("adding "<<id);
       
       tf::Pose T_0_hc ;
       tf::poseMsgToTF( obj.pose.pose, T_0_hc );
       
       std::string path;
-      if(!nh_.getParam(obj.obj_id.data,path))
+      if(!nh_.getParam(obj.object_type.data,path))
       {
-        ROS_ERROR_STREAM("param "<<nh_.getNamespace()<<"/"<< obj.obj_id.data <<" not found");
+        ROS_ERROR_STREAM("param "<<nh_.getNamespace()<<"/"<< obj.object_type.data <<" not found");
         res.success = false;
         return true;
       }      
       
       objs.push_back( toCollisionObject( id, path, obj.pose.header.frame_id, T_0_hc) );
-      
+
       moveit_msgs::ObjectColor color; 
-      color.id = id; color.color.r = 255; color.color.g = 255; color.color.b = 255; color.color.a = 1;
+      color.id = type; color.color.r = 255; color.color.g = 255; color.color.b = 255; color.color.a = 1;
       
       colors.push_back(color);
     }

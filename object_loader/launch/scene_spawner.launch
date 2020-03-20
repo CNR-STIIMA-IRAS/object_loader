@@ -1,0 +1,13 @@
+<?xml version="1.0"?>
+<launch>
+  
+  <arg name="name_space" default="/"/>
+  
+  <group ns="$(arg name_space)">
+    <rosparam command="load" file="$(find object_loader)/config/static_scene.yaml"/>
+    <node pkg="object_loader" name="scene_spawner" type="scene_spawner" respawn="true" output="screen"/>
+  </group>
+  
+</launch>
+
+

@@ -46,6 +46,12 @@ add_dependencies     (context_manager_node ${${PROJECT_NAME}_EXPORTED_TARGETS} $
 target_link_libraries(context_manager_node ${catkin_LIBRARIES} )
 
 
+add_executable       (scene_spawner src/scene_spawner.cpp)
+add_dependencies     (scene_spawner ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
+target_link_libraries(scene_spawner ${catkin_LIBRARIES} )
+
+
+
 
 
 

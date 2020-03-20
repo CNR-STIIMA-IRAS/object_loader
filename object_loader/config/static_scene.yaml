@@ -1,0 +1,7 @@
+scene_objects:
+- {type: "sidewall", frame: "world", position: [1, 0 ,0], quaternion: [0, 0, 0, 1]}
+- {type: "sidewall", frame: "world", position: [2, 0 ,0], quaternion: [0, 0, 0, 1]}
+- {type: "sidewall", frame: "world", position: [3, 0 ,0], quaternion: [0, 0, 0, 1]}
+- {type: "sidewall", frame: "world", position: [3, 0 ,1], quaternion: [0, 0, 0, 1]}
+- {type: "sidewall", frame: "world", position: [3, 0 ,2], quaternion: [0, 0, 0, 1]}
+- {type: "cargo_lower", frame: "world", position: [3, 5 ,2], quaternion: [0, 0, 0, 1]}
