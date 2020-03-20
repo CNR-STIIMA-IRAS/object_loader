@@ -131,11 +131,30 @@ class PlanningSceneConfigurator
   {
     std::vector< moveit_msgs::CollisionObject > objs;
     std::vector< moveit_msgs::ObjectColor     > colors;
-    std::vector<std::string > v = planning_scene_interface_.getKnownObjectNames();
+    std::vector<std::string > known_objects = planning_scene_interface_.getKnownObjectNames();
     std::map<std::string,int> types;
-    for (const std::string& type: v)
-      types.insert(std::pair<std::string,int>(type,0));
+    for (const std::string& object_id: known_objects)
+    {
+      std::string type;
+      std::size_t found = object_id.find_last_of("_");
+      if (found==std::string::npos)
+        type=object_id;
+      else
+        type=object_id.substr(0,found);
 
+      ROS_INFO("object id %s has type %s",object_id.c_str(),type.c_str());
+      std::map<std::string,int>::iterator it =types.find(type);
+      if (it==types.end())
+        types.insert(std::pair<std::string,int>(type,0));
+
+
+      it =types.find(type);
+      int ia = object_id.back() - '0';
+      if (ia>=0 && ia<=9)
+        it->second++;
+
+
+    }
     for (auto obj : req.objects)
     {
       std::string type = obj.object_type.data;
