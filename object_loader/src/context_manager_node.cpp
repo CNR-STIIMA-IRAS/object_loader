@@ -173,7 +173,7 @@ class PlanningSceneConfigurator
           return false;
         }
         std::vector<double> scale_v;
-        if( !rosparam_utilities::getParamVector(config,"box",scale_v) )
+        if( !rosparam_utilities::getParamVector(config,"scale",scale_v) )
         {
           ROS_ERROR("scale has to be an array of 3 elements");
           return false;
