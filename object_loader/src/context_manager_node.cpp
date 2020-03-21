@@ -14,6 +14,7 @@
 #include <tf/tf.h>
 #include <object_loader_msgs/addObjects.h>
 #include <object_loader_msgs/removeObjects.h>
+#include <rosparam_utilities/rosparam_utilities.h>
 
 const std::string RESET_SCENE_SRV   = "reset_scene";
 const std::string ADD_OBJECT_SRV    = "add_object_to_scene";
@@ -29,11 +30,11 @@ class PlanningSceneConfigurator
 
   ros::ServiceServer add_object_srv_;
   ros::ServiceServer remove_object_srv_;
-  ros::ServiceServer reset_srv_;  
+  ros::ServiceServer reset_srv_;
   
   bool applyAndCheckPS( ros::NodeHandle nh
-                      , std::vector<moveit_msgs::CollisionObject> cov
-                      , std::vector<moveit_msgs::ObjectColor> colors , ros::Duration timeout)
+                        , std::vector<moveit_msgs::CollisionObject> cov
+                        , std::vector<moveit_msgs::ObjectColor> colors , ros::Duration timeout)
   {
 
     ros::Publisher planning_scene_diff_publisher = nh.advertise<moveit_msgs::PlanningScene> ( "planning_scene", 1 );
@@ -51,7 +52,7 @@ class PlanningSceneConfigurator
 
 
     for ( moveit_msgs::CollisionObject co: cov )
-        planning_scene_msg.world.collision_objects.push_back ( co );
+      planning_scene_msg.world.collision_objects.push_back ( co );
 
     planning_scene_msg.is_diff = true;
 
@@ -94,40 +95,144 @@ class PlanningSceneConfigurator
     return true;
   }
 
-  moveit_msgs::CollisionObject toCollisionObject( const std::string     &collisionObjID
-                                                , const std::string     &path_to_mesh
-                                                , const std::string     &reference_frame
-                                                , const tf::Pose        &pose
-                                                , const Eigen::Vector3d scale = Eigen::Vector3d(1,1,1))
+
+
+  bool toCollisionObject( const std::string         &collisionObjID
+                        , XmlRpc::XmlRpcValue config
+                        , const std::string         &reference_frame
+                        , const tf::Pose            &pose
+                        , moveit_msgs::CollisionObject& collision_object
+                        , moveit_msgs::ObjectColor& color)
   {
-    std::shared_ptr<moveit_msgs::CollisionObject> collision_object(new moveit_msgs::CollisionObject );
-    collision_object->id = collisionObjID;
-    shapes::Mesh* m = shapes::createMeshFromResource ( path_to_mesh, scale );
-    
-    shape_msgs::Mesh mesh;
-    shapes::ShapeMsg mesh_msg;
-    shapes::constructMsgFromShape ( m, mesh_msg );
-    mesh = boost::get<shape_msgs::Mesh> ( mesh_msg );
-    
-    collision_object->meshes.resize ( 1 );
-    collision_object->mesh_poses.resize ( 1 );
-    collision_object->meshes[0] = mesh;
-    collision_object->header.frame_id = reference_frame;
-    
+    collision_object.id = collisionObjID;
+
+    if( config.getType() != XmlRpc::XmlRpcValue::TypeStruct)
+    {
+      ROS_ERROR("parameter is not a struct");
+      return false;
+    }
+
     geometry_msgs::Pose pose_msg;
     tf::poseTFToMsg ( pose, pose_msg );
-    
-    collision_object->mesh_poses[0] = pose_msg;
-    
-    collision_object->meshes.push_back ( mesh );
-    collision_object->mesh_poses.push_back ( collision_object->mesh_poses[0] );
-    collision_object->operation = collision_object->ADD;
-    
-    return *collision_object;
+    collision_object.operation = collision_object.ADD;
+    collision_object.header.frame_id = reference_frame;
+
+
+    if( config.hasMember("color") )
+    {
+      if( (config["color"]).getType() != XmlRpc::XmlRpcValue::TypeArray)
+      {
+        ROS_ERROR("color has to be an array of 4 elements (r,g,b,alpha)");
+        return false;
+      }
+      std::vector<double> rgba;
+      if( !rosparam_utilities::getParamVector(config,"color",rgba) )
+      {
+        ROS_ERROR("color has to be an array of 4 elements (r,g,b,alpha)");
+        return false;
+      }
+      if (rgba.size()!=4)
+      {
+        ROS_ERROR("color has to be an array of 4 elements (r,g,b,alpha)");
+        return false;
+      }
+      color.id = collision_object.id;
+      color.color.r = rgba.at(0);
+      color.color.g = rgba.at(1);
+      color.color.b = rgba.at(2);
+      color.color.a = rgba.at(3);
+
+    }
+    else
+    {
+      color.id = collision_object.id;
+      color.color.r = 255;
+      color.color.g = 255;
+      color.color.b = 255;
+      color.color.a = 1;
+    }
+
+    if( config.hasMember("mesh") )
+    {
+      XmlRpc::XmlRpcValue mesh_config=config["mesh"];
+      if( mesh_config.getType() != XmlRpc::XmlRpcValue::TypeString)
+      {
+        ROS_ERROR("mesh has to be a string");
+        return false;
+      }
+
+      std::string path=rosparam_utilities::toString(mesh_config);
+
+
+      Eigen::Vector3d scale = Eigen::Vector3d(1,1,1);
+      if (config.hasMember("scale"))
+      {
+        if( (config["scale"]).getType() != XmlRpc::XmlRpcValue::TypeArray)
+        {
+          ROS_ERROR("scale has to be an array of 3 elements");
+          return false;
+        }
+        std::vector<double> scale_v;
+        if( !rosparam_utilities::getParamVector(config,"box",scale_v) )
+        {
+          ROS_ERROR("scale has to be an array of 3 elements");
+          return false;
+        }
+        if (scale_v.size()!=3)
+        {
+          ROS_ERROR("scale has to be an array of 3 elements");
+          return false;
+        }
+        scale(0)=scale_v.at(0);
+        scale(1)=scale_v.at(1);
+        scale(2)=scale_v.at(2);
+      }
+      shapes::Mesh* m = shapes::createMeshFromResource ( path, scale );
+
+      shape_msgs::Mesh mesh;
+      shapes::ShapeMsg mesh_msg;
+      shapes::constructMsgFromShape ( m, mesh_msg );
+      mesh = boost::get<shape_msgs::Mesh> ( mesh_msg );
+
+      collision_object.meshes.resize ( 1 );
+      collision_object.mesh_poses.resize ( 1 );
+      collision_object.meshes[0] = mesh;
+      collision_object.mesh_poses[0] = pose_msg;
+      collision_object.header.frame_id = reference_frame;
+      return true;
+    }
+    if( config.hasMember("box") )
+    {
+      shape_msgs::SolidPrimitive primitive;
+      std::vector<double> size;
+      if( !rosparam_utilities::getParamVector(config,"box",size) )
+      {
+        ROS_ERROR("box has to be an array of 3 elements");
+        return false;
+      }
+      if (size.size()!=3)
+      {
+        ROS_ERROR("box has to be an array of 3 elements");
+        return false;
+      }
+
+      primitive.type = primitive.BOX;
+      primitive.dimensions.resize(3);
+      primitive.dimensions[0] = size.at(0);
+      primitive.dimensions[1] = size.at(1);
+      primitive.dimensions[2] = size.at(2);
+
+      collision_object.primitive_poses.push_back(pose_msg);
+      collision_object.primitives.push_back(primitive);
+      return true;
+    }
+    ROS_ERROR_STREAM("configuration not recognized\n"<< config);
+    return false;
+
   }
   
   bool addObjects( object_loader_msgs::addObjects::Request&  req
-                 , object_loader_msgs::addObjects::Response& res )
+                   , object_loader_msgs::addObjects::Response& res )
   {
     std::vector< moveit_msgs::CollisionObject > objs;
     std::vector< moveit_msgs::ObjectColor     > colors;
@@ -178,26 +283,29 @@ class PlanningSceneConfigurator
       tf::Pose T_0_hc ;
       tf::poseMsgToTF( obj.pose.pose, T_0_hc );
       
-      std::string path;
-      if(!nh_.getParam(obj.object_type.data,path))
+      XmlRpc::XmlRpcValue config;
+      if(!nh_.getParam(obj.object_type.data,config))
       {
         ROS_ERROR_STREAM("param "<<nh_.getNamespace()<<"/"<< obj.object_type.data <<" not found");
         res.success = false;
         return true;
-      }      
+      }
       
-      objs.push_back( toCollisionObject( id, path, obj.pose.header.frame_id, T_0_hc) );
-
-      moveit_msgs::ObjectColor color; 
-      color.id = type; color.color.r = 255; color.color.g = 255; color.color.b = 255; color.color.a = 1;
-      
+      moveit_msgs::ObjectColor color;
+      moveit_msgs::CollisionObject collision_object;
+      if (!toCollisionObject( id, config, obj.pose.header.frame_id, T_0_hc,collision_object,color))
+      {
+        ROS_ERROR("error loading object %s",obj.object_type.data.c_str());
+        continue;
+      }
+      objs.push_back( collision_object );
       colors.push_back(color);
     }
     
     if( !applyAndCheckPS( ros::NodeHandle()
-                        , objs
-                        , colors
-                        , ros::Duration(10) ) )
+                          , objs
+                          , colors
+                          , ros::Duration(10) ) )
     {
       ROS_FATAL_STREAM("Failed in uploading the collision objects");
       res.success = false;
@@ -214,7 +322,7 @@ class PlanningSceneConfigurator
     return true;
   }
   
-    bool removeObjects( object_loader_msgs::removeObjects::Request&  req
+  bool removeObjects( object_loader_msgs::removeObjects::Request&  req
                       , object_loader_msgs::removeObjects::Response& res )
   {
     std::vector<std::string > v;
@@ -226,13 +334,13 @@ class PlanningSceneConfigurator
   }
   
   bool resetScene( std_srvs::Trigger::Request&   req
-                 , std_srvs::Trigger::Response&  res )
-  {    
+                   , std_srvs::Trigger::Response&  res )
+  {
     std::vector<std::string > v = planning_scene_interface_.getKnownObjectNames();
     planning_scene_interface_.removeCollisionObjects ( v );
     
     ros::Duration(2.0).sleep();
-    return (res.success = true); 
+    return (res.success = true);
     
   }
 

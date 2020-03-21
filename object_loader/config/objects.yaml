@@ -1,6 +1,6 @@
-cargo_lower: "package://object_loader/example_meshes/CargoPanelLower.stl"
-sidewall   : "package://object_loader/example_meshes/SidewallPanel.stl"
-scatola    : {box: [1, 0.1, 1]}
+cargo_lower: {mesh: "package://object_loader/example_meshes/CargoPanelLower.stl"}
+sidewall   : {mesh: "package://object_loader/example_meshes/SidewallPanel.stl", color: [255,0,0,1]}
+scatola    : {box: [0.1, 0.1, 0.1], color: [255,255,0,1]}
 
 
 
