@@ -1,3 +1,3 @@
-std_msgs/String[]  obj_ids
+string[]  obj_ids
 ---
 bool success

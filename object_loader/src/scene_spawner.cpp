@@ -55,14 +55,14 @@ int main(int argc, char **argv)
     std::string frame=rosparam_utilities::toString(object["frame"]);
 
 
-    ROS_DEBUG("Object type = %s",type.c_str());
+    ROS_INFO("Object type = %s",type.c_str());
 
 
 
     std::vector<double> position;
     if( !rosparam_utilities::getParamVector(object,"position",position) )
     {
-      ROS_WARN("pose has not the field 'position'");
+      ROS_WARN("object has not the field 'position'");
       continue;
     }
     assert(position.size()==3);
@@ -70,7 +70,7 @@ int main(int argc, char **argv)
     std::vector<double> quaternion;
     if( !rosparam_utilities::getParamVector(object,"quaternion",quaternion) )
     {
-      ROS_WARN("pose has not the field 'quaternion'");
+      ROS_WARN("object has not the field 'quaternion'");
       continue;
     }
     assert(quaternion.size()==4);
@@ -81,7 +81,7 @@ int main(int argc, char **argv)
     // if there are multiple object of the same type, add _00
 
 
-    obj.object_type.data=type;
+    obj.object_type=type;
 
 
     obj.pose.pose.position.x=position.at(0);

@@ -14,11 +14,15 @@
 #include <tf/tf.h>
 #include <object_loader_msgs/addObjects.h>
 #include <object_loader_msgs/removeObjects.h>
+#include <object_loader_msgs/attachObject.h>
+#include <object_loader_msgs/detachObject.h>
 #include <rosparam_utilities/rosparam_utilities.h>
 
 const std::string RESET_SCENE_SRV   = "reset_scene";
 const std::string ADD_OBJECT_SRV    = "add_object_to_scene";
 const std::string REMOVE_OBJECT_SRV = "remove_object_from_scene";
+const std::string ATTACH_OBJECT_SRV = "attach_object_to_link";
+const std::string DETACH_OBJECT_SRV = "detach_object_to_link";
 
 
 
@@ -30,71 +34,13 @@ class PlanningSceneConfigurator
 
   ros::ServiceServer add_object_srv_;
   ros::ServiceServer remove_object_srv_;
+  ros::ServiceServer attach_object_srv_;
+  ros::ServiceServer detach_object_srv_;
   ros::ServiceServer reset_srv_;
-  
-  bool applyAndCheckPS( ros::NodeHandle nh
-                        , std::vector<moveit_msgs::CollisionObject> cov
-                        , std::vector<moveit_msgs::ObjectColor> colors , ros::Duration timeout)
-  {
-
-    ros::Publisher planning_scene_diff_publisher = nh.advertise<moveit_msgs::PlanningScene> ( "planning_scene", 1 );
-
-    while ( planning_scene_diff_publisher.getNumSubscribers() < 1 )
-    {
-      ros::WallDuration sleep_t ( 0.5 );
-      sleep_t.sleep();
-    }
-
-    moveit_msgs::PlanningScene planning_scene_msg;
-
-    for(auto const & color : colors )
-      planning_scene_msg.object_colors.push_back ( color );
 
 
-    for ( moveit_msgs::CollisionObject co: cov )
-      planning_scene_msg.world.collision_objects.push_back ( co );
-
-    planning_scene_msg.is_diff = true;
-
-    ROS_INFO_STREAM("Update planning scene");
-    ros::ServiceClient planning_scene_diff_client = nh.serviceClient<moveit_msgs::ApplyPlanningScene> ( "apply_planning_scene" );
-    planning_scene_diff_client.waitForExistence();
-
-    moveit_msgs::ApplyPlanningScene srv;
-    srv.request.scene = planning_scene_msg;
-    planning_scene_diff_client.call ( srv );
-
-    ROS_INFO_STREAM("Wait for updated planning scene...");
-    ros::Time st = ros::Time::now();
-    while( ros::ok() )
-    {
-      auto const obj_names = planning_scene_interface_.getKnownObjectNames( );
-      bool loaded = true;
-      for( const auto & co : cov )
-      {
-        auto const it = std::find_if( obj_names.begin(), obj_names.end(), [ & ]( const std::string s ) { return co.id == s;} );
-        loaded &= (obj_names.end() != it);
-
-      }
-      if( loaded )
-      {
-        ROS_INFO_STREAM("Updated planning scene.");
-        break;
-      }
-      else
-      {
-        if( (ros::Time::now() - st) > timeout)
-        {
-          ROS_FATAL_STREAM("Timeout expired.");
-          return false;
-        }
-        ROS_INFO_STREAM_THROTTLE(2,"Wait for updated planning scene...");
-      }
-      ros::Duration(0.2).sleep();
-    }
-    return true;
-  }
-
+  std::map<std::string, moveit_msgs::CollisionObject > objs_map_;
+  std::map<std::string, moveit_msgs::ObjectColor     > colors_map_;
 
 
   bool toCollisionObject( const std::string         &collisionObjID
@@ -151,6 +97,30 @@ class PlanningSceneConfigurator
       color.color.b = 255;
       color.color.a = 1;
     }
+
+    if( config.hasMember("offset") )
+    {
+      if( (config["offset"]).getType() != XmlRpc::XmlRpcValue::TypeArray)
+      {
+        ROS_ERROR("offset has to be an array of 3 elements");
+        return false;
+      }
+      std::vector<double> offset;
+      if( !rosparam_utilities::getParamVector(config,"offset",offset) )
+      {
+         ROS_ERROR("offset has to be an array of 3 elements");
+        return false;
+      }
+      if (offset.size()!=3)
+      {
+         ROS_ERROR("offset has to be an array of 3 elements");
+        return false;
+      }
+      pose_msg.position.x+=offset.at(0);
+      pose_msg.position.y+=offset.at(1);
+      pose_msg.position.z+=offset.at(2);
+    }
+
 
     if( config.hasMember("mesh") )
     {
@@ -247,7 +217,6 @@ class PlanningSceneConfigurator
       else
         type=object_id.substr(0,found);
 
-      ROS_INFO("object id %s has type %s",object_id.c_str(),type.c_str());
       std::map<std::string,int>::iterator it =types.find(type);
       if (it==types.end())
         types.insert(std::pair<std::string,int>(type,0));
@@ -262,7 +231,7 @@ class PlanningSceneConfigurator
     }
     for (auto obj : req.objects)
     {
-      std::string type = obj.object_type.data;
+      std::string type = obj.object_type;
       
       
       std::string id;
@@ -278,15 +247,15 @@ class PlanningSceneConfigurator
       }
       res.ids.push_back(id);
 
-      ROS_INFO_STREAM("adding "<<id);
+      ROS_DEBUG_STREAM("adding "<<id);
       
       tf::Pose T_0_hc ;
       tf::poseMsgToTF( obj.pose.pose, T_0_hc );
       
       XmlRpc::XmlRpcValue config;
-      if(!nh_.getParam(obj.object_type.data,config))
+      if(!nh_.getParam(obj.object_type,config))
       {
-        ROS_ERROR_STREAM("param "<<nh_.getNamespace()<<"/"<< obj.object_type.data <<" not found");
+        ROS_ERROR_STREAM("param "<<nh_.getNamespace()<<"/"<< obj.object_type <<" not found");
         res.success = false;
         return true;
       }
@@ -295,30 +264,29 @@ class PlanningSceneConfigurator
       moveit_msgs::CollisionObject collision_object;
       if (!toCollisionObject( id, config, obj.pose.header.frame_id, T_0_hc,collision_object,color))
       {
-        ROS_ERROR("error loading object %s",obj.object_type.data.c_str());
+        ROS_ERROR("error loading object %s",obj.object_type.c_str());
         continue;
       }
       objs.push_back( collision_object );
       colors.push_back(color);
+
+      objs_map_.insert(std::pair<std::string, moveit_msgs::CollisionObject >(id,collision_object));
+      colors_map_.insert(std::pair<std::string, moveit_msgs::ObjectColor >(id,color));
+
     }
     
-    if( !applyAndCheckPS( ros::NodeHandle()
-                          , objs
-                          , colors
-                          , ros::Duration(10) ) )
+
+    if (!planning_scene_interface_.applyCollisionObjects(objs,colors))
     {
       ROS_FATAL_STREAM("Failed in uploading the collision objects");
       res.success = false;
     }
     else
     {
-      ROS_INFO_STREAM("Ok! Objects loaded in the planning scene");
-      
-      //TODO comunicazione a inbound server
-      
+      ROS_DEBUG_STREAM("Ok! Objects loaded in the planning scene");
       res.success = true;
     }
-    
+
     return true;
   }
   
@@ -327,7 +295,7 @@ class PlanningSceneConfigurator
   {
     std::vector<std::string > v;
     for (auto obj : req.obj_ids)
-      v.push_back(obj.data);
+      v.push_back(obj);
     planning_scene_interface_.removeCollisionObjects ( v );
     res.success = true;
     return true;
@@ -344,12 +312,102 @@ class PlanningSceneConfigurator
     
   }
 
+
+  bool attachObject(object_loader_msgs::attachObject::Request& req,
+                    object_loader_msgs::attachObject::Response& res)
+  {
+    std::map<std::string, moveit_msgs::CollisionObject >::iterator obj_it= objs_map_.find(req.obj_id);
+    if (obj_it==objs_map_.end())
+    {
+      ROS_WARN("object id %s is not managed by the object loader",req.obj_id.c_str());
+      res.success=false;
+      return true;
+    }
+    std::map<std::string, moveit_msgs::ObjectColor >::iterator color_it= colors_map_.find(req.obj_id);
+    if (color_it==colors_map_.end())
+    {
+      ROS_WARN("object id %s is not managed by the object loader",req.obj_id.c_str());
+      res.success=false;
+      return true;
+    }
+
+
+    std::vector<std::string> ids;
+    ids.push_back(req.obj_id);
+    std::map<std::string, moveit_msgs::CollisionObject> collision_objects=planning_scene_interface_.getObjects(ids);
+    if (collision_objects.size()==0)
+    {
+      ROS_WARN("object id %s is not in the scene",req.obj_id.c_str());
+      res.success=false;
+      return true;
+    }
+
+    moveit_msgs::CollisionObject obj=collision_objects.at(req.obj_id);
+    obj_it->second=obj;
+    obj_it->second.operation=moveit_msgs::CollisionObject::REMOVE;
+    planning_scene_interface_.applyCollisionObject(obj_it->second);
+
+    moveit_msgs::AttachedCollisionObject picked_object;
+    picked_object.object=obj_it->second;
+
+    picked_object.link_name=req.link_name;
+    picked_object.object.operation=moveit_msgs::CollisionObject::ADD;
+    planning_scene_interface_.applyAttachedCollisionObject(picked_object);
+
+
+    res.success=true;
+    return true;
+
+  }
+
+  bool detachObject(object_loader_msgs::detachObject::Request& req,
+                    object_loader_msgs::detachObject::Response& res)
+  {
+    std::map<std::string, moveit_msgs::CollisionObject >::iterator obj_it= objs_map_.find(req.obj_id);
+    if (obj_it==objs_map_.end())
+    {
+      ROS_WARN("object id %s is not managed by the object loader",req.obj_id.c_str());
+      res.success=false;
+      return true;
+    }
+    std::map<std::string, moveit_msgs::ObjectColor >::iterator color_it= colors_map_.find(req.obj_id);
+    if (color_it==colors_map_.end())
+    {
+      ROS_WARN("object id %s is not managed by the object loader",req.obj_id.c_str());
+      res.success=false;
+      return true;
+    }
+
+    std::vector<std::string> ids;
+    ids.push_back(req.obj_id);
+    std::map<std::string, moveit_msgs::AttachedCollisionObject> attached_objs=planning_scene_interface_.getAttachedObjects(ids);
+    if (attached_objs.size()==0)
+    {
+      ROS_WARN("object id %s is not in the scene",req.obj_id.c_str());
+      res.success=false;
+      return true;
+    }
+
+    moveit_msgs::AttachedCollisionObject placed_object=attached_objs.at(req.obj_id);
+    placed_object.object.operation=moveit_msgs::CollisionObject::REMOVE;
+    planning_scene_interface_.applyAttachedCollisionObject(placed_object);
+    placed_object.object.operation=moveit_msgs::CollisionObject::ADD;
+    planning_scene_interface_.applyCollisionObject(placed_object.object,color_it->second.color);
+    obj_it->second=placed_object.object;
+
+    res.success=true;
+    return true;
+
+  }
+
 public:
   PlanningSceneConfigurator(  )
     : nh_  ()
   {
     add_object_srv_    = nh_.advertiseService(ADD_OBJECT_SRV    , &PlanningSceneConfigurator::addObjects   , this);
     remove_object_srv_ = nh_.advertiseService(REMOVE_OBJECT_SRV , &PlanningSceneConfigurator::removeObjects, this);
+    attach_object_srv_ = nh_.advertiseService(ATTACH_OBJECT_SRV , &PlanningSceneConfigurator::attachObject ,  this);
+    detach_object_srv_ = nh_.advertiseService(DETACH_OBJECT_SRV , &PlanningSceneConfigurator::detachObject ,  this);
     reset_srv_         = nh_.advertiseService(RESET_SCENE_SRV   , &PlanningSceneConfigurator::resetScene   , this);
   }
 
