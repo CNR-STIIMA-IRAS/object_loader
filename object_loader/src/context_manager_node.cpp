@@ -305,9 +305,25 @@ class PlanningSceneConfigurator
                    , std_srvs::Trigger::Response&  res )
   {
     std::vector<std::string > v = planning_scene_interface_.getKnownObjectNames();
+    
+    
+    
+    
+    std::map<std::string, moveit_msgs::AttachedCollisionObject> aco = planning_scene_interface_.getAttachedObjects( );
+    for (auto c:aco)
+    { 
+      object_loader_msgs::detachObject msg;
+      msg.request.obj_id = c.first;
+      if(!detachObject(msg.request,msg.response))
+        ROS_ERROR_STREAM("Error in detaching "<<c.first);
+     }
+    
+    for (auto c:aco)
+      v.push_back(c.first);
+    
     planning_scene_interface_.removeCollisionObjects ( v );
     
-    ros::Duration(2.0).sleep();
+//     ros::Duration(2.0).sleep();
     return (res.success = true);
     
   }

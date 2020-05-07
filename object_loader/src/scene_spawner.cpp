@@ -25,7 +25,7 @@ int main(int argc, char **argv)
   if (config.getType() != XmlRpc::XmlRpcValue::TypeArray)
   {
     ROS_ERROR("scene_objects is not a list" );
-    return false;
+    return 0;
   }
 
   ROS_DEBUG("there are %zu objects",config.size());
