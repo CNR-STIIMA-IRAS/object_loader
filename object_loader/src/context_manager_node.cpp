@@ -17,6 +17,7 @@
 #include <object_loader_msgs/attachObject.h>
 #include <object_loader_msgs/detachObject.h>
 #include <rosparam_utilities/rosparam_utilities.h>
+#include <moveit_msgs/GetPlanningScene.h>
 
 const std::string RESET_SCENE_SRV   = "reset_scene";
 const std::string ADD_OBJECT_SRV    = "add_object_to_scene";
@@ -420,6 +421,7 @@ public:
   PlanningSceneConfigurator(  )
     : nh_  ()
   {
+
     add_object_srv_    = nh_.advertiseService(ADD_OBJECT_SRV    , &PlanningSceneConfigurator::addObjects   , this);
     remove_object_srv_ = nh_.advertiseService(REMOVE_OBJECT_SRV , &PlanningSceneConfigurator::removeObjects, this);
     attach_object_srv_ = nh_.advertiseService(ATTACH_OBJECT_SRV , &PlanningSceneConfigurator::attachObject ,  this);
@@ -436,9 +438,14 @@ public:
 int main(int argc, char** argv)
 {
 
-  ros::init(argc,argv,"popeye_assembly_test");
+  ros::init(argc,argv,"object_loader");
   ros::AsyncSpinner spinner(1);
   spinner.start();
+  ros::NodeHandle nh;
+  ros::ServiceClient moveit_client=nh.serviceClient<moveit_msgs::GetPlanningScene>("/get_planning_scene");
+  ROS_INFO_STREAM("context manager is waiting MoveIt!");
+  moveit_client.waitForExistence();
+  ROS_INFO("connected with MoveIt!");
 
   PlanningSceneConfigurator planning_scene_configurator;
 
