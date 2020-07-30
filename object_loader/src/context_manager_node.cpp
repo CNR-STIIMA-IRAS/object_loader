@@ -442,7 +442,7 @@ int main(int argc, char** argv)
   ros::AsyncSpinner spinner(1);
   spinner.start();
   ros::NodeHandle nh;
-  ros::ServiceClient moveit_client=nh.serviceClient<moveit_msgs::GetPlanningScene>("/get_planning_scene");
+  ros::ServiceClient moveit_client=nh.serviceClient<moveit_msgs::GetPlanningScene>("get_planning_scene");
   ROS_INFO_STREAM("context manager is waiting MoveIt!");
   moveit_client.waitForExistence();
   ROS_INFO("connected with MoveIt!");
