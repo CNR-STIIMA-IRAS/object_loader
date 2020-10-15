@@ -1,6 +1,16 @@
 #include <ros/ros.h>
 #include <object_loader_msgs/addObjects.h>
 #include <rosparam_utilities/rosparam_utilities.h>
+#include <std_srvs/SetBool.h>
+
+ros::ServiceClient add_obj;
+object_loader_msgs::addObjects srv;
+
+bool loadObjects(std_srvs::SetBoolRequest& req, std_srvs::SetBoolResponse res)
+{
+  add_obj.call(srv);
+}
+
 int main(int argc, char **argv)
 {
   ros::init(argc, argv, "node");
@@ -11,7 +21,6 @@ int main(int argc, char **argv)
   ROS_INFO_STREAM("Scene spawner is waiting  "<< add_obj.getService());
   add_obj.waitForExistence();
   ROS_INFO("reading object to spawn");
-  object_loader_msgs::addObjects srv;
 
 
   XmlRpc::XmlRpcValue config;
