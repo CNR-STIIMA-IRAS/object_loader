@@ -6,7 +6,7 @@
 ros::ServiceClient add_obj;
 object_loader_msgs::addObjects srv;
 
-bool loadObjects(std_srvs::SetBoolRequest& req, std_srvs::SetBoolResponse res)
+bool loadObjects(std_srvs::SetBoolRequest& req, std_srvs::SetBoolResponse& res)
 {
   add_obj.call(srv);
 }
@@ -108,7 +108,7 @@ int main(int argc, char **argv)
 
   add_obj.call(srv);
 
-
+  ros::ServiceServer load_objects_in_scene=nh.advertiseService("load_objects",loadObjects);
   ros::spin();
   return 0;
 }
