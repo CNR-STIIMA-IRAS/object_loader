@@ -109,5 +109,6 @@ int main(int argc, char **argv)
   add_obj.call(srv);
 
 
+  ros::spin();
   return 0;
 }
