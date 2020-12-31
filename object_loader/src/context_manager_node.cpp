@@ -18,6 +18,7 @@
 #include <object_loader_msgs/detachObject.h>
 #include <rosparam_utilities/rosparam_utilities.h>
 #include <moveit_msgs/GetPlanningScene.h>
+#include <eigen_conversions/eigen_msg.h>
 
 const std::string RESET_SCENE_SRV   = "reset_scene";
 const std::string ADD_OBJECT_SRV    = "add_object_to_scene";
@@ -60,7 +61,11 @@ class PlanningSceneConfigurator
     }
 
     geometry_msgs::Pose pose_msg;
+    Eigen::Affine3d T_reference_object;
+    Eigen::Affine3d T_object_mesh;
     tf::poseTFToMsg ( pose, pose_msg );
+    T_object_mesh.setIdentity();
+    tf::poseMsgToEigen(pose_msg,T_reference_object);
     collision_object.operation = collision_object.ADD;
     collision_object.header.frame_id = reference_frame;
 
@@ -99,6 +104,29 @@ class PlanningSceneConfigurator
       color.color.a = 1;
     }
 
+    if( config.hasMember("offset_quaternion") )
+    {
+      if( (config["offset_quaternion"]).getType() != XmlRpc::XmlRpcValue::TypeArray)
+      {
+        ROS_ERROR("offset has to be an array of 4 elements");
+        return false;
+      }
+      std::vector<double> offset;
+      if( !rosparam_utilities::getParamVector(config,"offset_quaternion",offset) )
+      {
+         ROS_ERROR("offset has to be an array of 4 elements");
+        return false;
+      }
+      if (offset.size()!=4)
+      {
+         ROS_ERROR("offset has to be an array of 4 elements");
+        return false;
+      }
+      Eigen::Quaterniond q(offset.at(0),offset.at(1),offset.at(2),offset.at(3));
+      q.normalize();
+      T_object_mesh=q;
+    }
+
     if( config.hasMember("offset") )
     {
       if( (config["offset"]).getType() != XmlRpc::XmlRpcValue::TypeArray)
@@ -117,11 +145,16 @@ class PlanningSceneConfigurator
          ROS_ERROR("offset has to be an array of 3 elements");
         return false;
       }
-      pose_msg.position.x+=offset.at(0);
-      pose_msg.position.y+=offset.at(1);
-      pose_msg.position.z+=offset.at(2);
+      T_object_mesh.translation()(0)=offset.at(0);
+      T_object_mesh.translation()(1)=offset.at(1);
+      T_object_mesh.translation()(2)=offset.at(2);
     }
 
+
+
+
+    Eigen::Affine3d T_reference_mesh=T_reference_object*T_object_mesh;
+    tf::poseEigenToMsg(T_reference_mesh,pose_msg);
 
     if( config.hasMember("mesh") )
     {
