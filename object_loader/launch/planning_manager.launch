@@ -1,0 +1,13 @@
+<?xml version="1.0"?>
+<launch>
+  
+  <arg name="name_space" default="/iiwa"/>
+  
+  <group ns="$(arg name_space)">
+    <rosparam command="load" file="$(find object_loader)/config/objects.yaml"/>
+    <node pkg="object_loader" name="context_manager_node" type="context_manager_node" respawn="true" output="screen"/>
+  </group>
+  
+</launch>
+
+

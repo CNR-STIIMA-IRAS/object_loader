@@ -1,0 +1,4 @@
+object_loader_msgs/Object[] objects
+---
+bool success
+string[] ids
