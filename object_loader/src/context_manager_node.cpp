@@ -12,10 +12,10 @@
 #include <std_srvs/Trigger.h>
 
 #include <tf/tf.h>
-#include <object_loader_msgs/addObjects.h>
-#include <object_loader_msgs/removeObjects.h>
-#include <object_loader_msgs/attachObject.h>
-#include <object_loader_msgs/detachObject.h>
+#include <object_loader_msgs/AddObjects.h>
+#include <object_loader_msgs/RemoveObjects.h>
+#include <object_loader_msgs/AttachObject.h>
+#include <object_loader_msgs/DetachObject.h>
 #include <rosparam_utilities/rosparam_utilities.h>
 #include <moveit_msgs/GetPlanningScene.h>
 #include <eigen_conversions/eigen_msg.h>
@@ -235,8 +235,8 @@ class PlanningSceneConfigurator
 
   }
   
-  bool addObjects( object_loader_msgs::addObjects::Request&  req
-                   , object_loader_msgs::addObjects::Response& res )
+  bool addObjects( object_loader_msgs::AddObjects::Request&  req
+                   , object_loader_msgs::AddObjects::Response& res )
   {
     std::vector< moveit_msgs::CollisionObject > objs;
     std::vector< moveit_msgs::ObjectColor     > colors;
@@ -324,8 +324,8 @@ class PlanningSceneConfigurator
     return true;
   }
   
-  bool removeObjects( object_loader_msgs::removeObjects::Request&  req
-                      , object_loader_msgs::removeObjects::Response& res )
+  bool removeObjects( object_loader_msgs::RemoveObjects::Request&  req
+                      , object_loader_msgs::RemoveObjects::Response& res )
   {
     std::vector<std::string > v;
     for (auto obj : req.obj_ids)
@@ -346,7 +346,7 @@ class PlanningSceneConfigurator
     std::map<std::string, moveit_msgs::AttachedCollisionObject> aco = planning_scene_interface_.getAttachedObjects( );
     for (auto c:aco)
     { 
-      object_loader_msgs::detachObject msg;
+      object_loader_msgs::DetachObject msg;
       msg.request.obj_id = c.first;
       if(!detachObject(msg.request,msg.response))
         ROS_ERROR_STREAM("Error in detaching "<<c.first);
@@ -363,8 +363,8 @@ class PlanningSceneConfigurator
   }
 
 
-  bool attachObject(object_loader_msgs::attachObject::Request& req,
-                    object_loader_msgs::attachObject::Response& res)
+  bool attachObject(object_loader_msgs::AttachObject::Request& req,
+                    object_loader_msgs::AttachObject::Response& res)
   {
     std::map<std::string, moveit_msgs::CollisionObject >::iterator obj_it= objs_map_.find(req.obj_id);
     if (obj_it==objs_map_.end())
@@ -410,8 +410,8 @@ class PlanningSceneConfigurator
 
   }
 
-  bool detachObject(object_loader_msgs::detachObject::Request& req,
-                    object_loader_msgs::detachObject::Response& res)
+  bool detachObject(object_loader_msgs::DetachObject::Request& req,
+                    object_loader_msgs::DetachObject::Response& res)
   {
     std::map<std::string, moveit_msgs::CollisionObject >::iterator obj_it= objs_map_.find(req.obj_id);
     if (obj_it==objs_map_.end())

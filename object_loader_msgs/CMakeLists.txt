@@ -16,14 +16,14 @@ find_package(catkin REQUIRED COMPONENTS
 
 
 add_message_files( DIRECTORY msg
-                   FILES object.msg)
+                   FILES Object.msg)
 
 add_service_files( DIRECTORY srv
                    FILES 
-                   addObjects.srv 
-                   removeObjects.srv
-                   attachObject.srv 
-                   detachObject.srv )
+                   AddObjects.srv 
+                   RemoveObjects.srv
+                   AttachObject.srv 
+                   DetachObject.srv )
 
 generate_messages( DEPENDENCIES 
                     geometry_msgs 

@@ -10,8 +10,8 @@
 
 #include <tf/tf.h>
 
-#include <object_loader_msgs/addObjects.h>
-#include <object_loader_msgs/removeObjects.h>
+#include <object_loader_msgs/AddObjects.h>
+#include <object_loader_msgs/RemoveObjects.h>
 
 class SceneObjectsManager
 {

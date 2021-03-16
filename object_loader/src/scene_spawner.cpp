@@ -1,10 +1,10 @@
 #include <ros/ros.h>
-#include <object_loader_msgs/addObjects.h>
+#include <object_loader_msgs/AddObjects.h>
 #include <rosparam_utilities/rosparam_utilities.h>
 #include <std_srvs/SetBool.h>
 
 ros::ServiceClient add_obj;
-object_loader_msgs::addObjects srv;
+object_loader_msgs::AddObjects srv;
 
 bool loadObjects(std_srvs::SetBoolRequest& req, std_srvs::SetBoolResponse& res)
 {
@@ -17,7 +17,7 @@ int main(int argc, char **argv)
   ros::NodeHandle nh;
 
 
-  ros::ServiceClient add_obj=nh.serviceClient<object_loader_msgs::addObjects>("add_object_to_scene");
+  ros::ServiceClient add_obj=nh.serviceClient<object_loader_msgs::AddObjects>("add_object_to_scene");
   ROS_INFO_STREAM("Scene spawner is waiting  "<< add_obj.getService());
   add_obj.waitForExistence();
   ROS_INFO("reading object to spawn");
@@ -85,7 +85,7 @@ int main(int argc, char **argv)
     assert(quaternion.size()==4);
 
 
-    object_loader_msgs::object obj;
+    object_loader_msgs::Object obj;
 
     // if there are multiple object of the same type, add _00
 
