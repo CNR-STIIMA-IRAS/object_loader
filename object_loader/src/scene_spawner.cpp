@@ -26,7 +26,7 @@ int main(int argc, char **argv)
   XmlRpc::XmlRpcValue config;
   if (!nh.getParam("scene_objects",config))
   {
-    ROS_DEBUG("scene_objects parameter is not defined");
+    ROS_INFO("scene_objects parameter is not defined. There are no objects to load, exit clean");
     return 0;
   }
 
