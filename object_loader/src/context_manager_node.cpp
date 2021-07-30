@@ -19,6 +19,7 @@
 #include <rosparam_utilities/rosparam_utilities.h>
 #include <moveit_msgs/GetPlanningScene.h>
 #include <eigen_conversions/eigen_msg.h>
+#include <tf_conversions/tf_eigen.h>
 #include <tf/transform_broadcaster.h>
 
 
@@ -45,7 +46,10 @@ class PlanningSceneConfigurator
 
   std::map<std::string, moveit_msgs::CollisionObject > objs_map_;
   std::map<std::string, moveit_msgs::ObjectColor     > colors_map_;
-
+  std::vector<tf::StampedTransform> relative_trasforms_;
+  std::map<std::string,Eigen::Affine3d,
+           std::less<std::string>,
+           Eigen::aligned_allocator<std::pair<const std::string,Eigen::Affine3d>>> tf_object_mesh_;
 
   bool toCollisionObject( const std::string         &collisionObjID
                         , XmlRpc::XmlRpcValue config
@@ -124,7 +128,7 @@ class PlanningSceneConfigurator
          ROS_ERROR("offset has to be an array of 4 elements");
         return false;
       }
-      Eigen::Quaterniond q(offset.at(0),offset.at(1),offset.at(2),offset.at(3));
+      Eigen::Quaterniond q(offset.at(3),offset.at(0),offset.at(1),offset.at(2));
       q.normalize();
       T_object_mesh=q;
     }
@@ -157,7 +161,59 @@ class PlanningSceneConfigurator
 
     Eigen::Affine3d T_reference_mesh=T_reference_object*T_object_mesh;
     tf::poseEigenToMsg(T_reference_mesh,pose_msg);
+    std::vector<tf::StampedTransform> grasp_trasforms;
+    if (config.hasMember("grasp_poses"))
+    {
+      XmlRpc::XmlRpcValue grasps=config["grasp_poses"];
+      for (int ig=0;ig<grasps.size();ig++)
+      {
+        XmlRpc::XmlRpcValue grasp=grasps[ig];
+        std::string tool=grasp["tool"];
+        std::string grasp_name=collisionObjID+"_grasp"+std::to_string(ig)+"_"+tool;
 
+        if( (grasp["quaternion"]).getType() != XmlRpc::XmlRpcValue::TypeArray)
+        {
+          ROS_ERROR("offset has to be an array of 4 elements");
+          return false;
+        }
+        std::vector<double> quat;
+        if( !rosparam_utilities::getParamVector(grasp,"quaternion",quat) )
+        {
+           ROS_ERROR("offset has to be an array of 4 elements");
+          return false;
+        }
+        if (quat.size()!=4)
+        {
+           ROS_ERROR("offset has to be an array of 4 elements");
+          return false;
+        }
+        tf::StampedTransform tf;
+        tf::Quaternion q(quat.at(0),quat.at(1),quat.at(2),quat.at(3));
+        tf.setRotation(q);
+
+        if( (grasp["position"]).getType() != XmlRpc::XmlRpcValue::TypeArray)
+        {
+          ROS_ERROR("offset has to be an array of 3 elements");
+          return false;
+        }
+        std::vector<double> position;
+        if( !rosparam_utilities::getParamVector(grasp,"position",position) )
+        {
+           ROS_ERROR("offset has to be an array of 3 elements");
+          return false;
+        }
+        if (position.size()!=3)
+        {
+           ROS_ERROR("offset has to be an array of 3 elements");
+          return false;
+        }
+        tf::Vector3 orig(position.at(0),position.at(1),position.at(2));
+        tf.setOrigin(orig);
+        tf.frame_id_=collisionObjID;
+        tf.child_frame_id_=grasp_name;
+        grasp_trasforms.push_back(tf);
+      }
+    }
     if( config.hasMember("mesh") )
     {
       XmlRpc::XmlRpcValue mesh_config=config["mesh"];
@@ -205,6 +261,9 @@ class PlanningSceneConfigurator
       collision_object.meshes[0] = mesh;
       collision_object.mesh_poses[0] = pose_msg;
       collision_object.header.frame_id = reference_frame;
+      tf_object_mesh_.insert(std::pair<std::string,Eigen::Affine3d>(collisionObjID,T_object_mesh));
+      for (auto tf: grasp_trasforms)
+        relative_trasforms_.push_back(tf);
       return true;
     }
     if( config.hasMember("box") )
@@ -230,6 +289,9 @@ class PlanningSceneConfigurator
 
       collision_object.primitive_poses.push_back(pose_msg);
       collision_object.primitives.push_back(primitive);
+      tf_object_mesh_.insert(std::pair<std::string,Eigen::Affine3d>(collisionObjID,T_object_mesh));
+      for (auto tf: grasp_trasforms)
+        relative_trasforms_.push_back(tf);
       return true;
     }
     ROS_ERROR_STREAM("configuration not recognized\n"<< config);
@@ -485,7 +547,6 @@ public:
     std::vector<std::string> attached_object_ids;
     for (const std::pair<std::string, moveit_msgs::CollisionObject >& obj:  objs_map_)
     {
-      ROS_INFO("object = %s",obj.first.c_str());
       if (std::find(object_names.begin(),object_names.end(),obj.first)<object_names.end())
       {
         object_ids.push_back(obj.first);
@@ -504,13 +565,17 @@ public:
     for (const std::string& object_name: object_ids)
     {
       std::string parent=objects.at(object_name).header.frame_id;
-      ROS_INFO_STREAM("world. id "<<object_name <<". pose = \n" <<object_poses.at(object_name) <<"\nparent = " <<parent);
+      geometry_msgs::Pose pose=object_poses.at(object_name);
 
+      Eigen::Affine3d T_parent_mesh;
+      tf::poseMsgToEigen(pose,T_parent_mesh);
+      Eigen::Affine3d T_obj_mesh=tf_object_mesh_.at(object_name);
+      Eigen::Affine3d T_parent_obj=T_parent_mesh*T_obj_mesh.inverse();
       tf::StampedTransform tf;
       tf.frame_id_=parent;
       tf.child_frame_id_=object_name;
       tf.stamp_=ros::Time::now();
-      tf::poseMsgToTF(object_poses.at(object_name),tf);
+      tf::poseEigenToTF(T_parent_obj,tf);
       broadcaster.sendTransform(tf);
 
     }
@@ -528,12 +593,21 @@ public:
       }
       std::string parent=attached_objects.at(object_name).link_name;
 
-      ROS_WARN_STREAM("attached. id "<<object_name <<". pose = \n" << pose <<"\nparent = " <<parent);
+      Eigen::Affine3d T_parent_mesh;
+      tf::poseMsgToEigen(pose,T_parent_mesh);
+      Eigen::Affine3d T_obj_mesh=tf_object_mesh_.at(object_name);
+      Eigen::Affine3d T_parent_obj=T_parent_mesh*T_obj_mesh.inverse();
       tf::StampedTransform tf;
       tf.frame_id_=parent;
       tf.child_frame_id_=object_name;
       tf.stamp_=ros::Time::now();
-      tf::poseMsgToTF(pose,tf);
+      tf::poseEigenToTF(T_parent_obj,tf);
+      broadcaster.sendTransform(tf);
+    }
+
+    for (tf::StampedTransform tf: relative_trasforms_)
+    {
+      tf.stamp_=ros::Time::now();
       broadcaster.sendTransform(tf);
     }
   }
@@ -553,7 +627,7 @@ int main(int argc, char** argv)
 
   PlanningSceneConfigurator planning_scene_configurator;
 
-  ros::Rate lp(1);
+  ros::Rate lp(10);
   while (ros::ok())
   {
     lp.sleep();
