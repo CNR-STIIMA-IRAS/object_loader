@@ -19,6 +19,8 @@
 #include <rosparam_utilities/rosparam_utilities.h>
 #include <moveit_msgs/GetPlanningScene.h>
 #include <eigen_conversions/eigen_msg.h>
+#include <tf/transform_broadcaster.h>
+
 
 const std::string RESET_SCENE_SRV   = "reset_scene";
 const std::string ADD_OBJECT_SRV    = "add_object_to_scene";
@@ -39,7 +41,7 @@ class PlanningSceneConfigurator
   ros::ServiceServer attach_object_srv_;
   ros::ServiceServer detach_object_srv_;
   ros::ServiceServer reset_srv_;
-
+  tf::TransformBroadcaster broadcaster;
 
   std::map<std::string, moveit_msgs::CollisionObject > objs_map_;
   std::map<std::string, moveit_msgs::ObjectColor     > colors_map_;
@@ -340,8 +342,7 @@ class PlanningSceneConfigurator
   {
     std::vector<std::string > v = planning_scene_interface_.getKnownObjectNames();
     
-    
-    
+
     
     std::map<std::string, moveit_msgs::AttachedCollisionObject> aco = planning_scene_interface_.getAttachedObjects( );
     for (auto c:aco)
@@ -353,11 +354,19 @@ class PlanningSceneConfigurator
      }
     
     for (auto c:aco)
+    {
       v.push_back(c.first);
-    
+    }
+
+    for (const std::string obj: v)
+    {
+      // remove from map
+      ROS_DEBUG_STREAM("erasing " << obj);
+      if (objs_map_.find(obj)!=objs_map_.end())
+        objs_map_.erase(obj);
+    }
     planning_scene_interface_.removeCollisionObjects ( v );
-    
-//     ros::Duration(2.0).sleep();
+
     return (res.success = true);
     
   }
@@ -466,6 +475,68 @@ public:
   {
   }
 
+  void updateTF()
+  {
+
+    std::vector<std::string > object_names = planning_scene_interface_.getKnownObjectNames();
+    std::map<std::string, moveit_msgs::AttachedCollisionObject> attached_objects = planning_scene_interface_.getAttachedObjects();
+
+    std::vector<std::string> object_ids;
+    std::vector<std::string> attached_object_ids;
+    for (const std::pair<std::string, moveit_msgs::CollisionObject >& obj:  objs_map_)
+    {
+      ROS_INFO("object = %s",obj.first.c_str());
+      if (std::find(object_names.begin(),object_names.end(),obj.first)<object_names.end())
+      {
+        object_ids.push_back(obj.first);
+      }
+      else if (attached_objects.find(obj.first)!=attached_objects.end())
+      {
+        attached_object_ids.push_back(obj.first);
+      }
+      else
+        ROS_ERROR_STREAM_THROTTLE(1,"object "+obj.first+" in not in the scene");
+    }
+
+    std::map<std::string, geometry_msgs::Pose> object_poses=planning_scene_interface_.getObjectPoses(object_ids);
+    std::map<std::string, moveit_msgs::CollisionObject> objects = planning_scene_interface_.getObjects(object_ids);
+
+    for (const std::string& object_name: object_ids)
+    {
+      std::string parent=objects.at(object_name).header.frame_id;
+      ROS_INFO_STREAM("world. id "<<object_name <<". pose = \n" <<object_poses.at(object_name) <<"\nparent = " <<parent);
+
+      tf::StampedTransform tf;
+      tf.frame_id_=parent;
+      tf.child_frame_id_=object_name;
+      tf.stamp_=ros::Time::now();
+      tf::poseMsgToTF(object_poses.at(object_name),tf);
+      broadcaster.sendTransform(tf);
+
+    }
+    for (const std::string& object_name: attached_object_ids)
+    {
+      geometry_msgs::Pose pose;
+      if (attached_objects.at(object_name).object.primitive_poses.size()==1)
+        pose=attached_objects.at(object_name).object.primitive_poses.at(0);
+      else if (attached_objects.at(object_name).object.mesh_poses.size()==1)
+        pose=attached_objects.at(object_name).object.mesh_poses.at(0);
+      else
+      {
+        ROS_INFO_STREAM("TF publishing works only with one and only one primitive_pose or one and only one mesh_pose. Object "+object_name+" does not satisfy this condition");
+        continue;
+      }
+      std::string parent=attached_objects.at(object_name).link_name;
+
+      ROS_WARN_STREAM("attached. id "<<object_name <<". pose = \n" << pose <<"\nparent = " <<parent);
+      tf::StampedTransform tf;
+      tf.frame_id_=parent;
+      tf.child_frame_id_=object_name;
+      tf.stamp_=ros::Time::now();
+      tf::poseMsgToTF(pose,tf);
+      broadcaster.sendTransform(tf);
+    }
+  }
 };
 
 int main(int argc, char** argv)
@@ -482,6 +553,12 @@ int main(int argc, char** argv)
 
   PlanningSceneConfigurator planning_scene_configurator;
 
+  ros::Rate lp(1);
+  while (ros::ok())
+  {
+    lp.sleep();
+    planning_scene_configurator.updateTF();
+  }
   ros::waitForShutdown();
   return 0;
 }
