@@ -351,7 +351,7 @@ class PlanningSceneConfigurator
       tf::poseMsgToTF( obj.pose.pose, T_0_hc );
       
       XmlRpc::XmlRpcValue config;
-      if(!nh_.getParam(obj.object_type,config))
+      if(!nh_.getParam("/manipulation_objects/"+obj.object_type,config))
       {
         ROS_ERROR_STREAM("param "<<nh_.getNamespace()<<"/"<< obj.object_type <<" not found");
         res.success = false;
