@@ -4,6 +4,7 @@
 
 ### Added
 - change color service
+- TF pubblication
 
 ### Changed
 - namespace for parameters
