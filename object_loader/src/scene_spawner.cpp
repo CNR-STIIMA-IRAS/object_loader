@@ -8,7 +8,7 @@ object_loader_msgs::AddObjects srv;
 
 bool loadObjects(std_srvs::SetBoolRequest& req, std_srvs::SetBoolResponse& res)
 {
-  add_obj.call(srv);
+  return add_obj.call(srv);
 }
 
 int main(int argc, char **argv)
@@ -37,28 +37,28 @@ int main(int argc, char **argv)
     return 0;
   }
 
-  ROS_DEBUG("there are %zu objects",config.size());
+  ROS_DEBUG("there are %u objects",config.size());
 
 
 
-  for(size_t i=0; i < config.size(); i++)
+  for(int i=0; i < config.size(); i++)
   {
     XmlRpc::XmlRpcValue object = config[i];
     if( object.getType() != XmlRpc::XmlRpcValue::TypeStruct)
     {
-      ROS_WARN("The element #%zu is not a struct", i);
+      ROS_WARN("The element #%u is not a struct", i);
       continue;
     }
     if( !object.hasMember("type") )
     {
-      ROS_WARN("The element #%zu has not the field 'type'", i);
+      ROS_WARN("The element #%u has not the field 'type'", i);
       continue;
     }
     std::string type=rosparam_utilities::toString(object["type"]);
 
     if( !object.hasMember("frame") )
     {
-      ROS_WARN("The element #%zu has not the field 'frame'", i);
+      ROS_WARN("The element #%u has not the field 'frame'", i);
       continue;
     }
     std::string frame=rosparam_utilities::toString(object["frame"]);
@@ -69,7 +69,7 @@ int main(int argc, char **argv)
 
 
     std::vector<double> position;
-    if( !rosparam_utilities::getParamVector(object,"position",position) )
+    if( !rosparam_utilities::getParam(object,"position",position) )
     {
       ROS_WARN("object has not the field 'position'");
       continue;
@@ -109,6 +109,15 @@ int main(int argc, char **argv)
   add_obj.call(srv);
 
   ros::ServiceServer load_objects_in_scene=nh.advertiseService("load_objects",loadObjects);
-  ros::spin();
+
+  ros::Rate lp(10);
+  while (ros::ok())
+  {
+    if (not add_obj.exists())
+      return 0;
+    ros::spinOnce();
+    lp.sleep();
+  }
+
   return 0;
 }
