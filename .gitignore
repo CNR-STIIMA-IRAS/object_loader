@@ -1,4 +1,6 @@
 *~
 *.kdev4
 .kdev4/
-*.user
+*.user*
+*cpp.orig
+*.h.orig

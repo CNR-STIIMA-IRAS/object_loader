@@ -1,0 +1,4 @@
+string[] ids
+std_msgs/ColorRGBA[] colors
+---
+bool success

@@ -17,6 +17,7 @@ find_package(catkin REQUIRED COMPONENTS
   moveit_msgs
   object_loader_msgs
   eigen_conversions
+  tf_conversions
 )
 
 ## System dependencies are found with CMake's conventions
@@ -31,6 +32,7 @@ catkin_package(
     moveit_ros_planning_interface
     moveit_msgs
     eigen_conversions
+    tf_conversions
 )
 
 
