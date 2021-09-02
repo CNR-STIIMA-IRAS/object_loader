@@ -77,7 +77,7 @@ int main(int argc, char **argv)
     assert(position.size()==3);
 
     std::vector<double> quaternion;
-    if( !rosparam_utilities::getParamVector(object,"quaternion",quaternion) )
+    if( !rosparam_utilities::getParam(object,"quaternion",quaternion) )
     {
       ROS_WARN("object has not the field 'quaternion'");
       continue;

@@ -16,18 +16,19 @@
 #include <object_loader_msgs/RemoveObjects.h>
 #include <object_loader_msgs/AttachObject.h>
 #include <object_loader_msgs/DetachObject.h>
+#include <object_loader_msgs/ChangeColor.h>
 #include <rosparam_utilities/rosparam_utilities.h>
 #include <moveit_msgs/GetPlanningScene.h>
 #include <eigen_conversions/eigen_msg.h>
 #include <tf_conversions/tf_eigen.h>
 #include <tf/transform_broadcaster.h>
-
-
+#include <boost/algorithm/string/predicate.hpp>
 const std::string RESET_SCENE_SRV   = "reset_scene";
 const std::string ADD_OBJECT_SRV    = "add_object_to_scene";
 const std::string REMOVE_OBJECT_SRV = "remove_object_from_scene";
 const std::string ATTACH_OBJECT_SRV = "attach_object_to_link";
 const std::string DETACH_OBJECT_SRV = "detach_object_to_link";
+const std::string CHANGE_COLOR_SRV = "change_color";
 
 
 
@@ -42,21 +43,22 @@ class PlanningSceneConfigurator
   ros::ServiceServer attach_object_srv_;
   ros::ServiceServer detach_object_srv_;
   ros::ServiceServer reset_srv_;
+  ros::ServiceServer color_srv_;
   tf::TransformBroadcaster broadcaster;
 
   std::map<std::string, moveit_msgs::CollisionObject > objs_map_;
   std::map<std::string, moveit_msgs::ObjectColor     > colors_map_;
   std::vector<tf::StampedTransform> relative_trasforms_;
   std::map<std::string,Eigen::Affine3d,
-           std::less<std::string>,
-           Eigen::aligned_allocator<std::pair<const std::string,Eigen::Affine3d>>> tf_object_mesh_;
+  std::less<std::string>,
+  Eigen::aligned_allocator<std::pair<const std::string,Eigen::Affine3d>>> tf_object_mesh_;
 
   bool toCollisionObject( const std::string         &collisionObjID
-                        , XmlRpc::XmlRpcValue config
-                        , const std::string         &reference_frame
-                        , const tf::Pose            &pose
-                        , moveit_msgs::CollisionObject& collision_object
-                        , moveit_msgs::ObjectColor& color)
+                          , XmlRpc::XmlRpcValue config
+                          , const std::string         &reference_frame
+                          , const tf::Pose            &pose
+                          , moveit_msgs::CollisionObject& collision_object
+                          , moveit_msgs::ObjectColor& color)
   {
     collision_object.id = collisionObjID;
 
@@ -84,7 +86,7 @@ class PlanningSceneConfigurator
         return false;
       }
       std::vector<double> rgba;
-      if( !rosparam_utilities::getParamVector(config,"color",rgba) )
+      if( !rosparam_utilities::getParam(config,"color",rgba) )
       {
         ROS_ERROR("color has to be an array of 4 elements (r,g,b,alpha)");
         return false;
@@ -118,14 +120,14 @@ class PlanningSceneConfigurator
         return false;
       }
       std::vector<double> offset;
-      if( !rosparam_utilities::getParamVector(config,"offset_quaternion",offset) )
+      if( !rosparam_utilities::getParam(config,"offset_quaternion",offset) )
       {
-         ROS_ERROR("offset has to be an array of 4 elements");
+        ROS_ERROR("offset has to be an array of 4 elements");
         return false;
       }
       if (offset.size()!=4)
       {
-         ROS_ERROR("offset has to be an array of 4 elements");
+        ROS_ERROR("offset has to be an array of 4 elements");
         return false;
       }
       Eigen::Quaterniond q(offset.at(3),offset.at(0),offset.at(1),offset.at(2));
@@ -141,14 +143,14 @@ class PlanningSceneConfigurator
         return false;
       }
       std::vector<double> offset;
-      if( !rosparam_utilities::getParamVector(config,"offset",offset) )
+      if( !rosparam_utilities::getParam(config,"offset",offset) )
       {
-         ROS_ERROR("offset has to be an array of 3 elements");
+        ROS_ERROR("offset has to be an array of 3 elements");
         return false;
       }
       if (offset.size()!=3)
       {
-         ROS_ERROR("offset has to be an array of 3 elements");
+        ROS_ERROR("offset has to be an array of 3 elements");
         return false;
       }
       T_object_mesh.translation()(0)=offset.at(0);
@@ -177,14 +179,14 @@ class PlanningSceneConfigurator
           return false;
         }
         std::vector<double> quat;
-        if( !rosparam_utilities::getParamVector(grasp,"quaternion",quat) )
+        if( !rosparam_utilities::getParam(grasp,"quaternion",quat) )
         {
-           ROS_ERROR("offset has to be an array of 4 elements");
+          ROS_ERROR("offset has to be an array of 4 elements");
           return false;
         }
         if (quat.size()!=4)
         {
-           ROS_ERROR("offset has to be an array of 4 elements");
+          ROS_ERROR("offset has to be an array of 4 elements");
           return false;
         }
         tf::StampedTransform tf;
@@ -197,14 +199,14 @@ class PlanningSceneConfigurator
           return false;
         }
         std::vector<double> position;
-        if( !rosparam_utilities::getParamVector(grasp,"position",position) )
+        if( !rosparam_utilities::getParam(grasp,"position",position) )
         {
-           ROS_ERROR("offset has to be an array of 3 elements");
+          ROS_ERROR("offset has to be an array of 3 elements");
           return false;
         }
         if (position.size()!=3)
         {
-           ROS_ERROR("offset has to be an array of 3 elements");
+          ROS_ERROR("offset has to be an array of 3 elements");
           return false;
         }
         tf::Vector3 orig(position.at(0),position.at(1),position.at(2));
@@ -235,7 +237,7 @@ class PlanningSceneConfigurator
           return false;
         }
         std::vector<double> scale_v;
-        if( !rosparam_utilities::getParamVector(config,"scale",scale_v) )
+        if( !rosparam_utilities::getParam(config,"scale",scale_v) )
         {
           ROS_ERROR("scale has to be an array of 3 elements");
           return false;
@@ -270,7 +272,7 @@ class PlanningSceneConfigurator
     {
       shape_msgs::SolidPrimitive primitive;
       std::vector<double> size;
-      if( !rosparam_utilities::getParamVector(config,"box",size) )
+      if( !rosparam_utilities::getParam(config,"box",size) )
       {
         ROS_ERROR("box has to be an array of 3 elements");
         return false;
@@ -309,11 +311,29 @@ class PlanningSceneConfigurator
     for (const std::string& object_id: known_objects)
     {
       std::string type;
-      std::size_t found = object_id.find_last_of("_");
-      if (found==std::string::npos)
-        type=object_id;
+      // manipulator-object id follows this scheme /manipulator/[TYPE]/n_[NUMBER]
+
+      // check the start
+      if (not boost::starts_with(object_id,"manipulation/"))
+      {
+        ROS_DEBUG_STREAM("it is not a manipulator object: "<<object_id);
+        continue;
+      }
+
+      // remove the first part "/manipulator/
+      std::size_t found1 = object_id.find_first_of("/")+1;
+      // remove the last part "/n_[NUMBER]"
+      std::size_t found2 = object_id.find_last_of("/");
+
+      if (found2==std::string::npos)
+      {
+        ROS_DEBUG_STREAM("it is not a manipulator object: "<<object_id);
+        continue;
+      }
       else
-        type=object_id.substr(0,found);
+      {
+        type=object_id.substr(found1,found2-found1);
+      }
 
       std::map<std::string,int>::iterator it =types.find(type);
       if (it==types.end())
@@ -321,27 +341,33 @@ class PlanningSceneConfigurator
 
 
       it =types.find(type);
-      int ia = object_id.back() - '0';
-      if (ia>=0 && ia<=9)
-        it->second++;
-
-
+      std::string number=object_id.substr(found2+3,100);
+      try
+      {
+        int ia=std::stoi( number );
+        if (it->second<=ia)
+          it->second=ia+1;
+      }
+      catch (...)
+      {
+        ROS_WARN_STREAM("unable to compute the number for id = "<<object_id);
+      }
     }
+
     for (auto obj : req.objects)
     {
       std::string type = obj.object_type;
-      
-      
       std::string id;
       std::map<std::string,int>::iterator it =types.find(type);
+
       if (it==types.end())
       {
         types.insert(std::pair<std::string,int>(type,1));
-        id=type+"_0";
+        id="manipulation/"+type+"/n_0";
       }
       else
       {
-        id=type+"_"+std::to_string(it->second++);
+        id="manipulation/"+type+"/n_"+std::to_string(it->second++);
       }
       res.ids.push_back(id);
 
@@ -353,7 +379,7 @@ class PlanningSceneConfigurator
       XmlRpc::XmlRpcValue config;
       if(!nh_.getParam("/manipulation_objects_geometry/"+obj.object_type,config))
       {
-        ROS_ERROR_STREAM("param "<<nh_.getNamespace()<<"/"<< obj.object_type <<" not found");
+        ROS_ERROR_STREAM("param "<<nh_.getNamespace()<<"/manipulation_objects_geometry/"<< obj.object_type <<" not found");
         res.success = false;
         return true;
       }
@@ -408,12 +434,12 @@ class PlanningSceneConfigurator
     
     std::map<std::string, moveit_msgs::AttachedCollisionObject> aco = planning_scene_interface_.getAttachedObjects( );
     for (auto c:aco)
-    { 
+    {
       object_loader_msgs::DetachObject msg;
       msg.request.obj_id = c.first;
       if(!detachObject(msg.request,msg.response))
         ROS_ERROR_STREAM("Error in detaching "<<c.first);
-     }
+    }
     
     for (auto c:aco)
     {
@@ -521,16 +547,58 @@ class PlanningSceneConfigurator
 
   }
 
+  bool changeColor(object_loader_msgs::ChangeColor::Request& req,
+                   object_loader_msgs::ChangeColor::Response& res)
+  {
+    bool found=true;
+    std::vector<std::string> ids;
+    std::vector<moveit_msgs::ObjectColor> object_colors;
+    std::vector<moveit_msgs::CollisionObject> collision_objects;
+    for (size_t idx=0;idx<req.ids.size();idx++)
+    {
+      std::string& id= req.ids.at(idx);
+      std_msgs::ColorRGBA c=req.colors.at(idx);
+      std::map<std::string, moveit_msgs::CollisionObject >::iterator obj_it= objs_map_.find(id);
+      if (obj_it==objs_map_.end())
+      {
+        ROS_WARN("object id %s is not managed by the object loader",id.c_str());
+        found=false;
+        continue;
+      }
+      ids.push_back(id);
+      moveit_msgs::ObjectColor color;
+      color.id=id;
+      color.color.a=c.a;
+      color.color.r=c.r;
+      color.color.g=c.g;
+      color.color.b=c.b;
+      object_colors.push_back(color);
+
+    }
+    std::map<std::string, geometry_msgs::Pose> poses= planning_scene_interface_.getObjectPoses(ids);
+    for (size_t idx=0;idx<ids.size();idx++)
+    {
+      std::string& id= ids.at(idx);
+      moveit_msgs::CollisionObject obj=objs_map_.at(id);
+      obj.pose=poses.at(id);
+      obj.operation=moveit_msgs::CollisionObject::ADD;
+    }
+    planning_scene_interface_.applyCollisionObjects(collision_objects,object_colors);
+
+    res.success=found;
+    return found;
+  }
 public:
   PlanningSceneConfigurator(  )
     : nh_  ()
   {
 
-    add_object_srv_    = nh_.advertiseService(ADD_OBJECT_SRV    , &PlanningSceneConfigurator::addObjects   , this);
-    remove_object_srv_ = nh_.advertiseService(REMOVE_OBJECT_SRV , &PlanningSceneConfigurator::removeObjects, this);
-    attach_object_srv_ = nh_.advertiseService(ATTACH_OBJECT_SRV , &PlanningSceneConfigurator::attachObject ,  this);
-    detach_object_srv_ = nh_.advertiseService(DETACH_OBJECT_SRV , &PlanningSceneConfigurator::detachObject ,  this);
-    reset_srv_         = nh_.advertiseService(RESET_SCENE_SRV   , &PlanningSceneConfigurator::resetScene   , this);
+    add_object_srv_    = nh_.advertiseService(ADD_OBJECT_SRV    , &PlanningSceneConfigurator::addObjects    , this);
+    remove_object_srv_ = nh_.advertiseService(REMOVE_OBJECT_SRV , &PlanningSceneConfigurator::removeObjects , this);
+    attach_object_srv_ = nh_.advertiseService(ATTACH_OBJECT_SRV , &PlanningSceneConfigurator::attachObject  , this);
+    detach_object_srv_ = nh_.advertiseService(DETACH_OBJECT_SRV , &PlanningSceneConfigurator::detachObject  , this);
+    reset_srv_         = nh_.advertiseService(RESET_SCENE_SRV   , &PlanningSceneConfigurator::resetScene    , this);
+    color_srv_         = nh_.advertiseService(CHANGE_COLOR_SRV  , &PlanningSceneConfigurator::changeColor   , this);
   }
 
   ~PlanningSceneConfigurator()
