@@ -98,8 +98,8 @@ class PlanningSceneConfigurator
     return true;
   }
 
-  bool toCollisionObject( const std::string         &collisionObjID
-                          , XmlRpc::XmlRpcValue config
+  bool toCollisionObject( const std::string           &collisionObjID
+                          , XmlRpc::XmlRpcValue       config
                           , const std::string         &reference_frame
                           , const tf::Pose            &pose
                           , moveit_msgs::CollisionObject& collision_object
@@ -574,7 +574,9 @@ class PlanningSceneConfigurator
     {
       std::string& id= ids.at(idx);
       moveit_msgs::CollisionObject obj=objs_map_.at(id);
+      #if ROS_VERSION_MINIMUM(1, 5, 6)
       obj.pose=poses.at(id);
+      #endif
       obj.operation=moveit_msgs::CollisionObject::ADD;
     }
     planning_scene_interface_.applyCollisionObjects(collision_objects,object_colors);
