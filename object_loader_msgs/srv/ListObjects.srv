@@ -1,0 +1,5 @@
+---
+string[] ids
+string[] types
+geometry_msgs/Pose[] poses
+string frame_id
