@@ -6,9 +6,9 @@ add_compile_options(-std=c++11 -DBOOST_MPL_CFG_NO_PREPROCESSED_HEADERS -DBOOST_M
 set(CMAKE_BUILD_TYPE Debug)
 
 find_package(catkin REQUIRED COMPONENTS
-  geometry_msgs 
-  std_msgs  
-  std_srvs 
+  geometry_msgs
+  std_msgs
+  std_srvs
   roscpp
   message_generation
   rosparam_utilities
@@ -19,16 +19,18 @@ add_message_files( DIRECTORY msg
                    FILES Object.msg)
 
 add_service_files( DIRECTORY srv
-                   FILES 
-                   AddObjects.srv 
+                   FILES
+                   AddObjects.srv
                    RemoveObjects.srv
-                   AttachObject.srv 
-                   DetachObject.srv )
+                   AttachObject.srv
+                   DetachObject.srv
+                   ChangeColor.srv
+                 )
 
-generate_messages( DEPENDENCIES 
-                    geometry_msgs 
-                    std_msgs 
-                    std_srvs 
+generate_messages( DEPENDENCIES
+                    geometry_msgs
+                    std_msgs
+                    std_srvs
 )
 
 
