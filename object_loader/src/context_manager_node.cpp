@@ -574,7 +574,7 @@ class PlanningSceneConfigurator
     {
       std::string& id= ids.at(idx);
       moveit_msgs::CollisionObject obj=objs_map_.at(id);
-      #if ROS_VERSION_MINIMUM(1, 5, 6)
+      #if ROS_VERSION_MINIMUM(1, 15, 6)
       obj.pose=poses.at(id);
       #endif
       obj.operation=moveit_msgs::CollisionObject::ADD;
