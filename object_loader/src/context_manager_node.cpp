@@ -54,6 +54,7 @@ class PlanningSceneConfigurator
   std::map<std::string, moveit_msgs::CollisionObject >               objs_map_;
   std::map<std::string, moveit_msgs::ObjectColor     >               colors_map_;
   std::map<std::string, std::pair<std::string,geometry_msgs::Pose>>  poses_map_;
+  std::map<std::string,int> types_;
 
   std::vector<tf::StampedTransform> relative_trasforms_;
   std::map<std::string,Eigen::Affine3d,
@@ -295,7 +296,6 @@ class PlanningSceneConfigurator
     std::vector< moveit_msgs::CollisionObject > objs;
     std::vector< moveit_msgs::ObjectColor     > colors;
     std::vector<std::string > known_objects = planning_scene_interface_.getKnownObjectNames();
-    std::map<std::string,int> types;
     for (const std::string& object_id: known_objects)
     {
       if (objs_map_.find(object_id)!=objs_map_.end())
@@ -310,12 +310,12 @@ class PlanningSceneConfigurator
         continue;
       }
 
-      std::map<std::string,int>::iterator it =types.find(type);
-      if (it==types.end())
-        types.insert(std::pair<std::string,int>(type,0));
+      std::map<std::string,int>::iterator it =types_.find(type);
+      if (it==types_.end())
+        types_.insert(std::pair<std::string,int>(type,0));
 
 
-      it =types.find(type);
+      it =types_.find(type);
       if (not std::isnan(object_number))
       {
         if (it->second<=object_number)
@@ -325,17 +325,18 @@ class PlanningSceneConfigurator
       {
         ROS_WARN_STREAM("unable to compute the number for id = "<<object_id);
       }
+
     }
 
     for (auto obj : req.objects)
     {
       std::string type = obj.object_type;
       std::string id;
-      std::map<std::string,int>::iterator it =types.find(type);
+      std::map<std::string,int>::iterator it =types_.find(type);
 
-      if (it==types.end())
+      if (it==types_.end())
       {
-        types.insert(std::pair<std::string,int>(type,1));
+        types_.insert(std::pair<std::string,int>(type,1));
         id="manipulation/"+type+"/n_0";
       }
       else
@@ -348,7 +349,7 @@ class PlanningSceneConfigurator
       
       tf::Pose T_0_hc ;
       tf::poseMsgToTF( obj.pose.pose, T_0_hc );
-      
+
       XmlRpc::XmlRpcValue config;
       if(!nh_.getParam(OBJECT_TYPE_NS+"/"+obj.object_type,config))
       {
