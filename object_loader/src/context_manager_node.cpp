@@ -25,7 +25,7 @@
 #include <tf_conversions/tf_eigen.h>
 #include <tf/transform_broadcaster.h>
 #include <boost/algorithm/string/predicate.hpp>
-
+#include <mutex>
 const std::string RESET_SCENE_SRV   = "reset_scene";
 const std::string ADD_OBJECT_SRV    = "add_object_to_scene";
 const std::string REMOVE_OBJECT_SRV = "remove_object_from_scene";
@@ -55,7 +55,7 @@ class PlanningSceneConfigurator
   std::map<std::string, moveit_msgs::ObjectColor     >               colors_map_;
   std::map<std::string, std::pair<std::string,geometry_msgs::Pose>>  poses_map_;
   std::map<std::string,int> types_;
-
+  std::mutex obj_mtx_;
   std::vector<tf::StampedTransform> relative_trasforms_;
   std::map<std::string,Eigen::Affine3d,
   std::less<std::string>,
@@ -298,6 +298,8 @@ class PlanningSceneConfigurator
     std::vector<std::string > known_objects = planning_scene_interface_.getKnownObjectNames();
     for (const std::string& object_id: known_objects)
     {
+      std::lock_guard<std::mutex> guard(obj_mtx_);
+
       if (objs_map_.find(object_id)!=objs_map_.end())
       {
         continue;
@@ -368,9 +370,11 @@ class PlanningSceneConfigurator
       objs.push_back( collision_object );
       colors.push_back(color);
 
+      obj_mtx_.lock();
       objs_map_.insert(std::pair<std::string, moveit_msgs::CollisionObject >(id,collision_object));
       colors_map_.insert(std::pair<std::string, moveit_msgs::ObjectColor >(id,color));
       poses_map_.insert(std::pair<std::string,std::pair<std::string,geometry_msgs::Pose>>(id,std::pair<std::string,geometry_msgs::Pose>(obj.pose.header.frame_id,obj.pose.pose)));
+      obj_mtx_.unlock();
     }
     
 
@@ -394,9 +398,11 @@ class PlanningSceneConfigurator
     std::vector<std::string > v;
     for (std::string obj : req.obj_ids)
     {
+      obj_mtx_.lock();
       auto it=objs_map_.find(obj);
       if (it!=objs_map_.end())
         objs_map_.erase(it);
+      obj_mtx_.unlock();
       v.push_back(obj);
     }
     planning_scene_interface_.removeCollisionObjects ( v );
@@ -431,8 +437,10 @@ class PlanningSceneConfigurator
     {
       // remove from map
       ROS_DEBUG_STREAM("erasing " << obj);
+      obj_mtx_.lock();
       if (objs_map_.find(obj)!=objs_map_.end())
         objs_map_.erase(obj);
+      obj_mtx_.unlock();
     }
     planning_scene_interface_.removeCollisionObjects ( v );
 
@@ -444,6 +452,7 @@ class PlanningSceneConfigurator
   bool listObjects(object_loader_msgs::ListObjects::Request&  req,
                    object_loader_msgs::ListObjects::Response& res)
   {
+    std::lock_guard<std::mutex> guard(obj_mtx_);
     for (const std::pair<std::string, moveit_msgs::CollisionObject >& p: objs_map_)
     {
        std::string object_id=p.first;
@@ -465,6 +474,7 @@ class PlanningSceneConfigurator
   bool attachObject(object_loader_msgs::AttachObject::Request& req,
                     object_loader_msgs::AttachObject::Response& res)
   {
+    std::lock_guard<std::mutex> guard(obj_mtx_);
     std::map<std::string, moveit_msgs::CollisionObject >::iterator obj_it= objs_map_.find(req.obj_id);
     if (obj_it==objs_map_.end())
     {
@@ -512,6 +522,7 @@ class PlanningSceneConfigurator
   bool detachObject(object_loader_msgs::DetachObject::Request& req,
                     object_loader_msgs::DetachObject::Response& res)
   {
+    std::lock_guard<std::mutex> guard(obj_mtx_);
     std::map<std::string, moveit_msgs::CollisionObject >::iterator obj_it= objs_map_.find(req.obj_id);
     if (obj_it==objs_map_.end())
     {
@@ -558,6 +569,7 @@ class PlanningSceneConfigurator
     std::vector<moveit_msgs::CollisionObject> collision_objects;
     for (size_t idx=0;idx<req.ids.size();idx++)
     {
+      std::lock_guard<std::mutex> guard(obj_mtx_);
       std::string& id= req.ids.at(idx);
       std_msgs::ColorRGBA c=req.colors.at(idx);
       std::map<std::string, moveit_msgs::CollisionObject >::iterator obj_it= objs_map_.find(id);
@@ -611,7 +623,7 @@ public:
 
   void updateTF()
   {
-
+    std::lock_guard<std::mutex> guard(obj_mtx_);
     std::vector<std::string > object_names = planning_scene_interface_.getKnownObjectNames();
     std::map<std::string, moveit_msgs::AttachedCollisionObject> attached_objects = planning_scene_interface_.getAttachedObjects();
 
