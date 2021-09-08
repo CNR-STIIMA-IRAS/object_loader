@@ -392,9 +392,16 @@ class PlanningSceneConfigurator
                       , object_loader_msgs::RemoveObjects::Response& res )
   {
     std::vector<std::string > v;
-    for (auto obj : req.obj_ids)
+    for (std::string obj : req.obj_ids)
+    {
+      auto it=objs_map_.find(obj);
+      if (it!=objs_map_.end())
+        objs_map_.erase(it);
       v.push_back(obj);
+    }
     planning_scene_interface_.removeCollisionObjects ( v );
+
+
     res.success = true;
     return true;
   }
