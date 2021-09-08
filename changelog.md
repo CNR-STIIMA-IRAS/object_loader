@@ -5,6 +5,7 @@
 ### Added
 - change color service
 - TF pubblication
+- add list_objects service
 
 ### Changed
 - namespace for parameters
