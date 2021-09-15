@@ -285,6 +285,25 @@ class PlanningSceneConfigurator
       tf_object_mesh_.insert(std::pair<std::string,Eigen::Affine3d>(collisionObjID,T_object_mesh));
       return true;
     }
+    if( config.hasMember("sphere") )
+    {
+      shape_msgs::SolidPrimitive primitive;
+      double radius;
+      if( !rosparam_utilities::getParam(config,"sphere",radius) )
+      {
+        ROS_ERROR("box has one double value representing the radius");
+        return false;
+      }
+
+      primitive.type = primitive.SPHERE;
+      primitive.dimensions.resize(1);
+      primitive.dimensions[0] = radius;
+
+      collision_object.primitive_poses.push_back(pose_msg);
+      collision_object.primitives.push_back(primitive);
+      tf_object_mesh_.insert(std::pair<std::string,Eigen::Affine3d>(collisionObjID,T_object_mesh));
+      return true;
+    }
     ROS_ERROR_STREAM("configuration not recognized\n"<< config);
     return false;
 
