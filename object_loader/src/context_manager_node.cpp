@@ -463,6 +463,11 @@ class PlanningSceneConfigurator
     }
     planning_scene_interface_.removeCollisionObjects ( v );
 
+    std::map<std::string, int>::iterator it;
+
+    for (it = types_.begin(); it != types_.end(); it++)
+      it->second=0;
+
     return (res.success = true);
     
   }
