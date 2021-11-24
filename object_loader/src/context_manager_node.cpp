@@ -434,6 +434,7 @@ class PlanningSceneConfigurator
   bool resetScene( std_srvs::Trigger::Request&   req
                    , std_srvs::Trigger::Response&  res )
   {
+    ROS_DEBUG("resetting reset..");
     std::vector<std::string > v = planning_scene_interface_.getKnownObjectNames();
     
 
@@ -467,6 +468,7 @@ class PlanningSceneConfigurator
 
     for (it = types_.begin(); it != types_.end(); it++)
       it->second=0;
+
 
     return (res.success = true);
     
