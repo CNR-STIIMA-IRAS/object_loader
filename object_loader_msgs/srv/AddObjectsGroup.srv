@@ -1,0 +1,4 @@
+string objects_group
+---
+bool success
+string[] ids

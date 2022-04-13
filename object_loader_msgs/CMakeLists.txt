@@ -26,6 +26,8 @@ add_service_files( DIRECTORY srv
                    DetachObject.srv
                    ChangeColor.srv
                    ListObjects.srv
+                   AddObjectsGroup.srv
+                   RemoveObjectsGroup.srv
                  )
 
 generate_messages( DEPENDENCIES
