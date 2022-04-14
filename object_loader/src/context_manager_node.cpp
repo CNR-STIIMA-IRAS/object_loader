@@ -18,6 +18,8 @@
 #include <object_loader_msgs/DetachObject.h>
 #include <object_loader_msgs/ChangeColor.h>
 #include <object_loader_msgs/ListObjects.h>
+#include <object_loader_msgs/IsAttached.h>
+
 
 #include <rosparam_utilities/rosparam_utilities.h>
 #include <moveit_msgs/GetPlanningScene.h>
@@ -33,6 +35,7 @@ const std::string ATTACH_OBJECT_SRV = "attach_object_to_link";
 const std::string DETACH_OBJECT_SRV = "detach_object_to_link";
 const std::string CHANGE_COLOR_SRV  = "change_color";
 const std::string LIST_OBJECT_SRV   = "list_objects";
+const std::string IS_ATTACH_SRV  = "is_attached";
 
 
 const std::string OBJECT_TYPE_NS    = "object_geometries";
@@ -46,6 +49,7 @@ class PlanningSceneConfigurator
   ros::ServiceServer remove_object_srv_;
   ros::ServiceServer attach_object_srv_;
   ros::ServiceServer detach_object_srv_;
+  ros::ServiceServer is_attach_srv_;
   ros::ServiceServer reset_srv_;
   ros::ServiceServer color_srv_;
   ros::ServiceServer list_srv_;
@@ -536,6 +540,7 @@ class PlanningSceneConfigurator
     picked_object.object=obj_it->second;
 
     picked_object.link_name=req.link_name;
+    picked_object.touch_links.push_back(req.link_name);
     picked_object.object.operation=moveit_msgs::CollisionObject::ADD;
     planning_scene_interface_.applyAttachedCollisionObject(picked_object);
 
@@ -544,6 +549,8 @@ class PlanningSceneConfigurator
     return true;
 
   }
+
+
 
   bool detachObject(object_loader_msgs::DetachObject::Request& req,
                     object_loader_msgs::DetachObject::Response& res)
@@ -585,6 +592,42 @@ class PlanningSceneConfigurator
     return true;
 
   }
+
+  bool isAttached(object_loader_msgs::IsAttached::Request& req,
+                object_loader_msgs::IsAttached::Response& res)
+  {
+
+    std::lock_guard<std::mutex> guard(obj_mtx_);
+    std::map<std::string, moveit_msgs::CollisionObject >::iterator obj_it= objs_map_.find(req.obj_id);
+    if (obj_it==objs_map_.end())
+    {
+      ROS_WARN("object id %s is not managed by the object loader",req.obj_id.c_str());
+      res.success=false;
+      return true;
+    }
+    std::map<std::string, moveit_msgs::ObjectColor >::iterator color_it= colors_map_.find(req.obj_id);
+    if (color_it==colors_map_.end())
+    {
+      ROS_WARN("object id %s is not managed by the object loader",req.obj_id.c_str());
+      res.success=false;
+      return true;
+    }
+
+    std::vector<std::string> ids;
+    ids.push_back(req.obj_id);
+    std::map<std::string, moveit_msgs::AttachedCollisionObject> attached_objs=planning_scene_interface_.getAttachedObjects(ids);
+    if (attached_objs.size()==0)
+    {
+      ROS_WARN("object id %s is not attached",req.obj_id.c_str());
+      res.success=false;
+      return true;
+    }
+    res.success=true;
+    return true;
+
+  }
+
+
 
   bool changeColor(object_loader_msgs::ChangeColor::Request& req,
                    object_loader_msgs::ChangeColor::Response& res)
@@ -638,6 +681,7 @@ public:
     remove_object_srv_ = nh_.advertiseService(REMOVE_OBJECT_SRV , &PlanningSceneConfigurator::removeObjects , this);
     attach_object_srv_ = nh_.advertiseService(ATTACH_OBJECT_SRV , &PlanningSceneConfigurator::attachObject  , this);
     detach_object_srv_ = nh_.advertiseService(DETACH_OBJECT_SRV , &PlanningSceneConfigurator::detachObject  , this);
+    is_attach_srv_     = nh_.advertiseService(IS_ATTACH_SRV     , &PlanningSceneConfigurator::isAttached      , this);
     reset_srv_         = nh_.advertiseService(RESET_SCENE_SRV   , &PlanningSceneConfigurator::resetScene    , this);
     color_srv_         = nh_.advertiseService(CHANGE_COLOR_SRV  , &PlanningSceneConfigurator::changeColor   , this);
     list_srv_          = nh_.advertiseService(LIST_OBJECT_SRV   , &PlanningSceneConfigurator::listObjects   , this);

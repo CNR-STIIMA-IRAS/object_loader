@@ -24,6 +24,7 @@ add_service_files( DIRECTORY srv
                    RemoveObjects.srv
                    AttachObject.srv
                    DetachObject.srv
+                   IsAttached.srv
                    ChangeColor.srv
                    ListObjects.srv
                    AddObjectsGroup.srv
