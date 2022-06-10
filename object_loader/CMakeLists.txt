@@ -5,11 +5,11 @@ add_compile_options(-std=c++11 -DBOOST_MPL_CFG_NO_PREPROCESSED_HEADERS -DBOOST_M
 
 set(CMAKE_BUILD_TYPE Debug)
 
-find_package(catkin REQUIRED COMPONENTS 
+find_package(catkin REQUIRED COMPONENTS
   roscpp
-  geometry_msgs 
-  std_msgs  
-  std_srvs 
+  geometry_msgs
+  std_msgs
+  std_srvs
   rosparam_utilities
   moveit_core
   moveit_ros_planning
@@ -33,6 +33,7 @@ catkin_package(
     moveit_msgs
     eigen_conversions
     tf_conversions
+    octomap
 )
 
 
@@ -53,10 +54,3 @@ target_link_libraries(context_manager_node ${catkin_LIBRARIES} )
 add_executable       (scene_spawner src/scene_spawner.cpp)
 add_dependencies     (scene_spawner ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
 target_link_libraries(scene_spawner ${catkin_LIBRARIES} )
-
-
-
-
-
-
-
