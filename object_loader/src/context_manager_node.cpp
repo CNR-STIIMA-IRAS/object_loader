@@ -13,6 +13,7 @@
 
 #include <tf/tf.h>
 #include <object_loader_msgs/AddObjects.h>
+#include <object_loader_msgs/MoveObjects.h>
 #include <object_loader_msgs/RemoveObjects.h>
 #include <object_loader_msgs/AttachObject.h>
 #include <object_loader_msgs/DetachObject.h>
@@ -30,6 +31,7 @@
 #include <mutex>
 const std::string RESET_SCENE_SRV   = "reset_scene";
 const std::string ADD_OBJECT_SRV    = "add_object_to_scene";
+const std::string MOVE_OBJECT_SRV   = "move_object_in_scene";
 const std::string REMOVE_OBJECT_SRV = "remove_object_from_scene";
 const std::string ATTACH_OBJECT_SRV = "attach_object_to_link";
 const std::string DETACH_OBJECT_SRV = "detach_object_to_link";
@@ -46,6 +48,7 @@ class PlanningSceneConfigurator
   moveit::planning_interface::PlanningSceneInterface       planning_scene_interface_;
 
   ros::ServiceServer add_object_srv_;
+  ros::ServiceServer move_object_srv_;
   ros::ServiceServer remove_object_srv_;
   ros::ServiceServer attach_object_srv_;
   ros::ServiceServer detach_object_srv_;
@@ -126,7 +129,6 @@ class PlanningSceneConfigurator
     tf::poseMsgToEigen(pose_msg,T_reference_object);
     collision_object.operation = collision_object.ADD;
     collision_object.header.frame_id = reference_frame;
-
 
     if( config.hasMember("color") )
     {
@@ -414,6 +416,78 @@ class PlanningSceneConfigurator
 
     return true;
   }
+
+  bool moveObjects(object_loader_msgs::MoveObjects::Request&  req,
+                   object_loader_msgs::MoveObjects::Response& res)
+  {
+    moveit_msgs::ObjectColor color;
+    moveit_msgs::CollisionObject collision_object;
+    std::vector< moveit_msgs::CollisionObject > objs;
+    std::vector< moveit_msgs::ObjectColor     > colors;
+
+    res.success = false;
+    if(not req.obj_ids.empty())
+    {
+      bool found;
+      std::string id;
+      for(unsigned int i=0;i<req.obj_ids.size();i++)
+      {
+        found = false;
+        id = req.obj_ids[i];
+
+        obj_mtx_.lock();
+        auto it = objs_map_.find(id);
+        if(it != objs_map_.end())
+        {
+          found = true;
+          color = colors_map_[id];
+        }
+        obj_mtx_.unlock();
+
+        if(found)
+        {
+          collision_object = it->second;
+
+          collision_object.pose = req.poses[i].pose;
+          collision_object.operation = moveit_msgs::CollisionObject::MOVE;
+
+          collision_object.meshes    .clear(); //remove the warnings
+          collision_object.planes    .clear(); //remove the warnings
+          collision_object.primitives.clear(); //remove the warnings
+
+          colors.push_back(color);
+          objs.push_back(collision_object);
+        }
+        else
+        {
+          res.success = false;
+          return true;
+        }
+      }
+
+      //Modify member classes only if all the objects can be moved
+      obj_mtx_.lock();
+      for(unsigned int i=0; i<objs.size();i++)
+      {
+        objs_map_ [req.obj_ids[i]].pose   = req.poses[i].pose;
+        poses_map_[req.obj_ids[i]].second = req.poses[i].pose;
+        poses_map_[req.obj_ids[i]].first  = req.poses[i].header.frame_id;
+      }
+      obj_mtx_.unlock();
+
+      if(not planning_scene_interface_.applyCollisionObjects(objs,colors))
+      {
+        ROS_FATAL_STREAM("Failed in uploading the collision objects pose");
+        res.success = false;
+      }
+      else
+      {
+        ROS_DEBUG_STREAM("Ok! Objects moved");
+        res.success = true;
+      }
+    }
+    return true;
+  }
   
   bool removeObjects( object_loader_msgs::RemoveObjects::Request&  req
                       , object_loader_msgs::RemoveObjects::Response& res )
@@ -485,18 +559,18 @@ class PlanningSceneConfigurator
     std::lock_guard<std::mutex> guard(obj_mtx_);
     for (const std::pair<std::string, moveit_msgs::CollisionObject >& p: objs_map_)
     {
-       std::string object_id=p.first;
-       std::string type;
-       int object_number;
-       if (not getType(object_id,type,object_number))
-       {
-         ROS_DEBUG_STREAM("it is not a manipulator object: "<<object_id);
-         continue;
-       }
-       res.ids.push_back(object_id);
-       res.types.push_back(type);
-       res.poses.push_back(poses_map_.at(object_id).second);
-       res.frame_ids.push_back(poses_map_.at(object_id).first);
+      std::string object_id=p.first;
+      std::string type;
+      int object_number;
+      if (not getType(object_id,type,object_number))
+      {
+        ROS_DEBUG_STREAM("it is not a manipulator object: "<<object_id);
+        continue;
+      }
+      res.ids.push_back(object_id);
+      res.types.push_back(type);
+      res.poses.push_back(poses_map_.at(object_id).second);
+      res.frame_ids.push_back(poses_map_.at(object_id).first);
     }
     return true;
   }
@@ -594,7 +668,7 @@ class PlanningSceneConfigurator
   }
 
   bool isAttached(object_loader_msgs::IsAttached::Request& req,
-                object_loader_msgs::IsAttached::Response& res)
+                  object_loader_msgs::IsAttached::Response& res)
   {
 
     std::lock_guard<std::mutex> guard(obj_mtx_);
@@ -663,9 +737,9 @@ class PlanningSceneConfigurator
     {
       std::string& id= ids.at(idx);
       moveit_msgs::CollisionObject obj=objs_map_.at(id);
-      #if ROS_VERSION_MINIMUM(1, 15, 6)
+#if ROS_VERSION_MINIMUM(1, 15, 6)
       obj.pose=poses.at(id);
-      #endif
+#endif
       obj.operation=moveit_msgs::CollisionObject::ADD;
     }
     planning_scene_interface_.applyCollisionObjects(collision_objects,object_colors);
@@ -678,10 +752,11 @@ public:
     : nh_  ()
   {
     add_object_srv_    = nh_.advertiseService(ADD_OBJECT_SRV    , &PlanningSceneConfigurator::addObjects    , this);
+    move_object_srv_   = nh_.advertiseService(MOVE_OBJECT_SRV   , &PlanningSceneConfigurator::moveObjects   , this);
     remove_object_srv_ = nh_.advertiseService(REMOVE_OBJECT_SRV , &PlanningSceneConfigurator::removeObjects , this);
     attach_object_srv_ = nh_.advertiseService(ATTACH_OBJECT_SRV , &PlanningSceneConfigurator::attachObject  , this);
     detach_object_srv_ = nh_.advertiseService(DETACH_OBJECT_SRV , &PlanningSceneConfigurator::detachObject  , this);
-    is_attach_srv_     = nh_.advertiseService(IS_ATTACH_SRV     , &PlanningSceneConfigurator::isAttached      , this);
+    is_attach_srv_     = nh_.advertiseService(IS_ATTACH_SRV     , &PlanningSceneConfigurator::isAttached    , this);
     reset_srv_         = nh_.advertiseService(RESET_SCENE_SRV   , &PlanningSceneConfigurator::resetScene    , this);
     color_srv_         = nh_.advertiseService(CHANGE_COLOR_SRV  , &PlanningSceneConfigurator::changeColor   , this);
     list_srv_          = nh_.advertiseService(LIST_OBJECT_SRV   , &PlanningSceneConfigurator::listObjects   , this);
@@ -723,6 +798,7 @@ public:
       poses_map_.at(object_name)=std::pair<std::string,geometry_msgs::Pose>(parent,pose);
       Eigen::Affine3d T_parent_mesh;
       tf::poseMsgToEigen(pose,T_parent_mesh);
+
       Eigen::Affine3d T_obj_mesh=tf_object_mesh_.at(object_name);
       Eigen::Affine3d T_parent_obj=T_parent_mesh*T_obj_mesh.inverse();
       tf::StampedTransform tf;

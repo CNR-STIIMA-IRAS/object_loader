@@ -1,0 +1,4 @@
+string[]  obj_ids
+geometry_msgs/PoseStamped[]  poses
+---
+bool success
