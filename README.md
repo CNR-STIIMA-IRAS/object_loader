@@ -10,6 +10,8 @@ TBD
 
 - AddObjects  
 
+- MoveObjects  
+
 - RemoveObjects
 
 - AttachObject
