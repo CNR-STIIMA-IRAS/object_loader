@@ -129,6 +129,10 @@ class PlanningSceneConfigurator
     tf::poseMsgToEigen(pose_msg,T_reference_object);
     collision_object.operation = collision_object.ADD;
     collision_object.header.frame_id = reference_frame;
+    collision_object.pose.orientation.x = 0;
+    collision_object.pose.orientation.y = 0;
+    collision_object.pose.orientation.z = 0;
+    collision_object.pose.orientation.w = 1;
 
     if( config.hasMember("color") )
     {
@@ -314,7 +318,7 @@ class PlanningSceneConfigurator
     return false;
 
   }
-  
+
   bool addObjects( object_loader_msgs::AddObjects::Request&  req
                    , object_loader_msgs::AddObjects::Response& res )
   {
@@ -373,7 +377,7 @@ class PlanningSceneConfigurator
       res.ids.push_back(id);
 
       ROS_DEBUG_STREAM("adding "<<id);
-      
+
       tf::Pose T_0_hc ;
       tf::poseMsgToTF( obj.pose.pose, T_0_hc );
 
@@ -384,7 +388,7 @@ class PlanningSceneConfigurator
         res.success = false;
         return true;
       }
-      
+
       moveit_msgs::ObjectColor color;
       moveit_msgs::CollisionObject collision_object;
       if (!toCollisionObject( id, config, obj.pose.header.frame_id, T_0_hc,collision_object,color))
@@ -401,7 +405,7 @@ class PlanningSceneConfigurator
       poses_map_.insert(std::pair<std::string,std::pair<std::string,geometry_msgs::Pose>>(id,std::pair<std::string,geometry_msgs::Pose>(obj.pose.header.frame_id,obj.pose.pose)));
       obj_mtx_.unlock();
     }
-    
+
 
     if (!planning_scene_interface_.applyCollisionObjects(objs,colors))
     {
@@ -421,7 +425,6 @@ class PlanningSceneConfigurator
                    object_loader_msgs::MoveObjects::Response& res)
   {
     moveit_msgs::ObjectColor color;
-    moveit_msgs::CollisionObject collision_object;
     std::vector< moveit_msgs::CollisionObject > objs;
     std::vector< moveit_msgs::ObjectColor     > colors;
 
@@ -446,9 +449,9 @@ class PlanningSceneConfigurator
 
         if(found)
         {
-          collision_object = it->second;
+          moveit_msgs::CollisionObject collision_object = it->second;
 
-          collision_object.pose = req.poses[i].pose;
+          collision_object.primitive_poses[0] = req.poses[i].pose;
           collision_object.operation = moveit_msgs::CollisionObject::MOVE;
 
           collision_object.meshes    .clear(); //remove the warnings
@@ -469,7 +472,7 @@ class PlanningSceneConfigurator
       obj_mtx_.lock();
       for(unsigned int i=0; i<objs.size();i++)
       {
-        objs_map_ [req.obj_ids[i]].pose   = req.poses[i].pose;
+//        objs_map_ [req.obj_ids[i]].pose   = req.poses[i].pose;
         poses_map_[req.obj_ids[i]].second = req.poses[i].pose;
         poses_map_[req.obj_ids[i]].first  = req.poses[i].header.frame_id;
       }
@@ -488,7 +491,7 @@ class PlanningSceneConfigurator
     }
     return true;
   }
-  
+
   bool removeObjects( object_loader_msgs::RemoveObjects::Request&  req
                       , object_loader_msgs::RemoveObjects::Response& res )
   {
@@ -508,15 +511,15 @@ class PlanningSceneConfigurator
     res.success = true;
     return true;
   }
-  
+
   bool resetScene( std_srvs::Trigger::Request&   req
                    , std_srvs::Trigger::Response&  res )
   {
     ROS_DEBUG("resetting reset..");
     std::vector<std::string > v = planning_scene_interface_.getKnownObjectNames();
-    
 
-    
+
+
     std::map<std::string, moveit_msgs::AttachedCollisionObject> aco = planning_scene_interface_.getAttachedObjects( );
     for (auto c:aco)
     {
@@ -525,7 +528,7 @@ class PlanningSceneConfigurator
       if(!detachObject(msg.request,msg.response))
         ROS_ERROR_STREAM("Error in detaching "<<c.first);
     }
-    
+
     for (auto c:aco)
     {
       v.push_back(c.first);
@@ -549,7 +552,7 @@ class PlanningSceneConfigurator
 
 
     return (res.success = true);
-    
+
   }
 
 
